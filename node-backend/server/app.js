@@ -22,7 +22,7 @@ export function createApp({ db = openDb(), key = loadMasterKey(), env = process.
     secureCookies: env.COOKIE_SECURE !== '0' && env.NODE_ENV === 'production',
     allowRegistration: env.ALLOW_REGISTRATION === '1',
     // akun.7mit is the default sign-in; AUTH_MODE=local switches to local email+password accounts (dev/self-hosted)
-    akunAuthUrl: env.AKUN_AUTH_URL || (env.AUTH_MODE === 'local' ? '' : 'https://lajzrempjyoqkubkumhb.supabase.co/functions/v1/akun-auth'), akunAuthApikey: env.AKUN_AUTH_APIKEY, akunPortalUrl: env.AKUN_PORTAL_URL || 'https://akun.7mit.org',
+    akunAuthUrl: env.AKUN_AUTH_URL || (env.AUTH_MODE === 'local' ? '' : 'https://lajzrempjyoqkubkumhb.supabase.co/functions/v1/akun-auth'), akunRevalidate: env.AKUN_REVALIDATE === '1', akunAuthApikey: env.AKUN_AUTH_APIKEY, akunPortalUrl: env.AKUN_PORTAL_URL || 'https://akun.7mit.org',
   };
   // Provider pre-filled for new mailboxes (users can still point an account at any other IMAP/SMTP server).
   const defaults = {

@@ -1,0 +1,2 @@
+// Records SMTP attempts; globalThis.__smtp.fail = (opts) => Error|undefined lets a test make a port fail.
+export default { createTransport(o) { return { async sendMail() { globalThis.__smtp.calls.push({ host: o.host, port: o.port, secure: o.secure, requireTLS: o.requireTLS, user: o.auth?.user }); const e = globalThis.__smtp.fail?.(o); if (e) throw e; return {}; }, async verify() {}, close() {} }; } };

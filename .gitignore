@@ -46,3 +46,6 @@ next-env.d.ts
 /work/
 *.tsbuildinfo
 /supabase/functions/**/node_modules/
+
+# real mailbox passwords never go in git
+*.local.json

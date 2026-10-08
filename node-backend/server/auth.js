@@ -1,6 +1,6 @@
 import { hashPassword, verifyPassword, randomToken, sha256, encrypt, decrypt } from './crypto.js';
 
-const SESSION_DAYS = 14;
+const SESSION_DAYS = 400; // effectively "stay signed in": browsers cap cookies at 400 days; every use extends it
 const RECHECK_SEC = 300; // how often an akun.7mit-backed session is re-validated upstream
 export const COOKIE = 'mail7_sid';
 // akun.7mit usernames: "<name>" or "<name>@7mit" (same normalisation as the akun-auth edge function)
@@ -54,7 +54,10 @@ export function createAuth(db, cfg, key) {
         const row = db.prepare(`SELECT u.*, s.akun_token_enc, s.checked_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>unixepoch()`).get(hash);
         if (row) {
           let alive = true;
-          if (akunMode && row.akun_token_enc && Date.now() / 1000 - row.checked_at > RECHECK_SEC) {
+          const exp = Math.floor(Date.now() / 1000) + SESSION_DAYS * 86400;
+          db.prepare('UPDATE sessions SET expires_at=? WHERE token_hash=? AND expires_at<?').run(exp, hash, exp - 86400); // sliding
+          // Only when AKUN_REVALIDATE=1: end the session if akun.7mit revoked it. Off by default so users are never signed out unexpectedly.
+          if (akunMode && cfg.akunRevalidate && row.akun_token_enc && Date.now() / 1000 - row.checked_at > RECHECK_SEC) {
             try {
               const r = await akun({ action: 'session', token: decrypt(row.akun_token_enc, key) }, req);
               if (r.status === 401) alive = false; // revoked from akun.7mit, or account deactivated

@@ -179,3 +179,6 @@ kbd{font:600 12px ui-monospace,SFMono-Regular,Menlo,monospace;background:#f4f5f7
 @keyframes mail-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
 .welcome-mark{animation:mail-float 4s ease-in-out infinite}
 .top-avatar{transition:transform .3s cubic-bezier(.34,1.56,.64,1)}.top-avatar:hover{transform:rotate(12deg) scale(1.1)}
+
+.locked-note{color:#8b919b;font-size:12px;display:inline-flex;align-items:center;gap:4px}
+.account-setting svg{display:inline;vertical-align:-2px;color:#8c2435}

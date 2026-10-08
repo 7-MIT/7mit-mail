@@ -9,7 +9,7 @@ const { openDb } = await import('../server/db.js');
 
 test('akun.7mit login mode', async (t) => {
   const m = mockAkun(); await new Promise((r) => m.server.listen(0, '127.0.0.1', r));
-  const env = { ...process.env, AKUN_AUTH_URL: `http://127.0.0.1:${m.server.address().port}/akun-auth`, ALLOW_REGISTRATION: '1' };
+  const env = { ...process.env, AKUN_AUTH_URL: `http://127.0.0.1:${m.server.address().port}/akun-auth`, ALLOW_REGISTRATION: '1', AKUN_REVALIDATE: '1' };
   const { app, sync, db } = createApp({ db: openDb(':memory:'), key: crypto.randomBytes(32), env });
   const server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -79,4 +79,26 @@ test('akun.7mit login mode', async (t) => {
   // brute force limit
   const c4 = mk(); for (let i = 0; i < 10; i++) await c4('POST', '/api/auth/login', { username: 'budi', password: 'bad' + i });
   assert.equal((await c4('POST', '/api/auth/login', { username: 'budi', password: 'rahasia123' })).status, 429);
+});
+
+test('by default nobody is signed out unexpectedly', async (t) => {
+  const m = mockAkun(); await new Promise((r) => m.server.listen(0, '127.0.0.1', r));
+  const env = { ...process.env, AKUN_AUTH_URL: `http://127.0.0.1:${m.server.address().port}/akun-auth` }; delete env.AKUN_REVALIDATE;
+  const { app, sync, db } = createApp({ db: openDb(':memory:'), key: crypto.randomBytes(32), env });
+  const server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+  t.after(() => { sync.stopAll(); server.close(); m.server.close(); });
+  const base = `http://127.0.0.1:${server.address().port}`; const jar = {};
+  const call = async (method, path, body) => {
+    const r = await fetch(base + path, { method, headers: { cookie: Object.entries(jar).map(([k, v]) => `${k}=${v}`).join('; '), ...(method !== 'GET' ? { 'x-requested-with': '7mit-mail' } : {}), ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+    for (const c of r.headers.getSetCookie()) { const [kv] = c.split(';'); const i = kv.indexOf('='); jar[kv.slice(0, i)] = kv.slice(i + 1); }
+    return { status: r.status, headers: r.headers };
+  };
+  const login = await call('POST', '/api/auth/login', { username: 'budi', password: 'rahasia123' });
+  assert.equal(login.status, 200);
+  assert.ok(Number(/Max-Age=(\d+)/.exec(login.headers.getSetCookie()[0])[1]) >= 399 * 86400, 'cookie lasts ~400 days');
+  // revoked upstream, re-check interval long gone, and the session row nearly expired: still signed in, and extended
+  for (const v of m.sessions.values()) v.revoked = true;
+  db.prepare('UPDATE sessions SET checked_at=0, expires_at=unixepoch()+3600').run();
+  assert.equal((await call('GET', '/api/me')).status, 200);
+  assert.ok(db.prepare('SELECT expires_at FROM sessions').get().expires_at > Date.now() / 1000 + 399 * 86400, 'session slides forward on use');
 });
