@@ -1,5 +1,6 @@
 // Default (locked) mailboxes: one shared mailbox per lembaga/departemen. Emails are fixed here; passwords come from the
-// MAIL_DEFAULT_MAILBOXES secret (JSON {"guru":"…","eksekutif":"…"}) and never live in the repository or the database.
+// MAIL_DEFAULT_MAILBOXES secret (JSON {"guru":"…","eksekutif":"…"}) or from the encrypted, service-role-only table
+// mail7mit_default_mailboxes. They never live in the repository.
 export const MAILBOXES = {
   guru: { email: 'guru@7mit.org', label: 'Guru' },
   eksekutif: { email: 'eksekutif@7mit.org', label: 'Lembaga Eksekutif' },
@@ -20,13 +21,15 @@ export const ROLE_DEPARTMENT = {
   teacher: 'guru', assistant: 'guru',
 };
 
-const tokens = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z ]/g, ' ').split(/\s+/).filter(Boolean);
-const compatible = (a, b) => a === b || (a.length === 1 && b[0] === a) || (b.length === 1 && a[0] === b);
+const tokens = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z ]/g, ' ').split(/\s+/).filter(Boolean);
+const edits = (a, b) => { const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]); for (let j = 1; j <= b.length; j++) d[0][j] = j; for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return d[a.length][b.length]; };
+// Same word, an initial, or a one-letter typo in a long word (Anindityo/Aninditya). Short words must match exactly: "Ali" is not "Ala".
+const compatible = (a, b) => a === b || (a.length === 1 && b[0] === a) || (b.length === 1 && a[0] === b) || (Math.min(a.length, b.length) >= 5 && Math.abs(a.length - b.length) <= 1 && edits(a, b) <= (Math.min(a.length, b.length) >= 9 ? 2 : 1));
 
 /** 0 = different person. Higher = more tokens agree. Initials ("Alamgir D. S.") match full names. */
 export function nameScore(a, b) {
   const x = tokens(a), y = tokens(b);
-  if (!x.length || !y.length || x[0] !== y[0]) return 0;
+  if (!x.length || !y.length || !compatible(x[0], y[0])) return 0;
   const n = Math.min(x.length, y.length); let score = 1;
   for (let i = 1; i < n; i++) { if (!compatible(x[i], y[i])) return 0; score++; }
   return score + (x.length === y.length ? 0.5 : 0);
@@ -62,7 +65,7 @@ export function parsePasswords(raw) {
 
 export function defaultCredentials(key, passwords) {
   const mb = MAILBOXES[key]; const pass = passwords[key];
-  if (!mb || !pass) throw Object.assign(new Error('This default mailbox is not configured yet. Ask an admin to set MAIL_DEFAULT_MAILBOXES.'), { status: 503 });
+  if (!mb || !pass) throw Object.assign(new Error('This default mailbox is not configured yet. Ask an admin to set it up.'), { status: 503 });
   return { ...DEFAULT_SERVERS, email: mb.email, imapUser: mb.email, imapPassword: pass, smtpUser: mb.email, smtpPassword: pass };
 }
 

@@ -1,3 +1,4 @@
+import {Buffer} from 'node:buffer';
 import {createCipheriv,createDecipheriv,randomBytes,createHmac,timingSafeEqual} from 'node:crypto';
 import {lookup} from 'node:dns/promises';
 import {BlockList,isIP} from 'node:net';

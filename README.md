@@ -72,8 +72,7 @@ Premium burgundy mail surfaces, rounded panels, focused input states, animated f
 ## Update: interaction layer and default servers
 
 - **Default servers.** The "Connect a mailbox" form is pre-filled with `imap.foundermail.mx:993` (TLS/SSL) and `smtp.foundermail.mx:587` (STARTTLS). Username defaults to the email address and the outgoing password to the incoming one.
-- **Port 587 on this host.** Supabase Edge Functions block outgoing SMTP ports 25 and 587. `mail7mit-api` now rewrites 587/25 to **TLS port 465** and tells the user, instead of rejecting the account. This only works if the provider also serves SMTP on 465; whether foundermail does has not been verified. If it does not, mail can be read but not sent from this deployment; the Node backend in `node-backend/` can use 587 directly.
-- **Needs a redeploy.** The 587 to 465 change is in `supabase/functions/mail7mit-api/index.ts` and takes effect only after the function is deployed. Until then the form still shows the 587 default and the old function rejects it with "Supabase blocks ports 25 and 587".
+- **Port 587.** `mail7mit-api` accepts SMTP on 587 (STARTTLS); only port 25 is rejected. Verified against foundermail from the Supabase runtime.
 - **Interface.** Initials avatars, hover quick actions (mark read/unread, trash), drag a message onto a folder to move it, keyboard shortcuts (`c`, `/`, `j`/`k`, `#`, `?`), button ripple, row exit animation, and debounced search (one IMAP search per pause instead of one per keystroke). Animations respect `prefers-reduced-motion`.
 
 
@@ -91,15 +90,16 @@ Every akun.7mit user gets the shared mailbox of their lembaga as a **locked defa
 
 Membership comes from `organization_members` / `organization_roles` (the same data as the organisation chart), matched to the login account by name (initials such as "Alamgir D. S." match full names). A name that matches two different lembaga gives **no** access; set it explicitly with `MAIL_DEPARTMENT_OVERRIDES='{"<account_key>":["legislatif","kemenkesbug"]}'`. An ordinary student with no lembaga has no default mailbox and can add their own.
 
-**Passwords are not in this repository.** Put them in an Edge Function secret (copy `supabase/default-mailboxes.example.json` to `default-mailboxes.local.json`, which git ignores, and fill it in):
-```bash
-supabase secrets set --project-ref lajzrempjyoqkubkumhb MAIL_DEFAULT_MAILBOXES="$(cat default-mailboxes.local.json)"
-supabase functions deploy mail7mit-api --project-ref lajzrempjyoqkubkumhb --no-verify-jwt
+**Passwords are not in this repository.** They live encrypted (AES-256-GCM, the same credential key as user mailboxes) in `public.mail7mit_default_mailboxes`, a service-role-only table (`supabase/sql/mail7mit_default_mailboxes.sql`). To (re)set them, call the token-protected `seedDefaults` action of `mail7mit-api` with the private sync token (the same one the background-sync cron uses), for example from SQL so the token never leaves the database:
+```sql
+select net.http_post(url:='https://<project>.supabase.co/functions/v1/mail7mit-api', headers:='{"Content-Type":"application/json"}'::jsonb,
+  body:=jsonb_build_object('action','seedDefaults','syncToken',(select secret from public.mail7mit_sync_secret where id=true),
+  'passwords',jsonb_build_object('guru','…','eksekutif','…','legislatif','…','yudikatif','…','kemenjira','…','kemenkrep','…','kemenbanggul','…','kemenkesbug','…')));
 ```
-Until the secret is set, default mailboxes appear in the list but opening one answers "not configured yet".
+An optional `MAIL_DEFAULT_MAILBOXES` secret (JSON, see `supabase/default-mailboxes.example.json`) is still read and the table overrides it. Two more token-protected actions help operations: `testDefaults` signs in to IMAP and SMTP for each default mailbox and reports ok/error per mailbox, and `defaultsReport` counts how many accounts get each mailbox (no names, no secrets).
 
-**SMTP on 587.** Supabase blocks outgoing 587. For default mailboxes the function tries STARTTLS on 587 first and, only if the connection itself fails (timeout/refused/blocked, not a wrong password), retries on TLS port 465. Whether foundermail serves 465 has not been verified.
+**SMTP on 587.** Verified from Supabase: signing in to `smtp.foundermail.mx` over STARTTLS on 587 works, so the earlier assumption that Supabase blocks 587 does not hold for this project. Only port 25 is rejected. For default mailboxes the function still retries on TLS 465 if 587 fails to connect at all.
 
 **Staying signed in.** The login cookie now lasts 400 days (the browser maximum) and is renewed on every use; the 30-day limit in `mail7mit-api` is gone. A user is signed out only if the akun.7mit session is revoked on purpose (changing the password there, or "sign out other devices"), or they press Sign out.
 
-Tests: `pnpm test:function` runs the real function handler against an in-memory database (default mailboxes per role, locked, no password in responses, 400-day sessions, 587 to 465 fallback).
+Tests: `pnpm test:function` runs the real function handler against an in-memory database (default mailboxes per role, locked, no password in responses, 400-day sessions, 587 to 465 fallback, seeding and testing defaults).

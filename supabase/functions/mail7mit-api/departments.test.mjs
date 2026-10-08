@@ -20,6 +20,16 @@ test('initials match full names, different people never match', () => {
   assert.equal(nameScore('', 'Narendra'), 0);
 });
 
+test('spelling differences between the chart and the login name still match, different people do not', () => {
+  assert.ok(nameScore('Ziggy Saverio Aninditya', 'Ziggy Saverio Anindityo') > 0);
+  assert.ok(nameScore('Muhammad Baihaqi Al Ghazali', 'Muhammad Baihaqi Al Ghozali') > 0);
+  assert.ok(nameScore('Habibie Aginara El Hadziq', 'Habibie Agnara El Hadziq') > 0);
+  assert.ok(nameScore('Kafyal Rusydi Fasya', 'Kafyal Rusydi Fazya') > 0);
+  assert.equal(nameScore('Muhammad Ali Ibrahim Alfatih', 'Muhammad Baihaqi Al Ghozali'), 0);
+  assert.equal(nameScore('Ali Ramadhan', 'Ala Ramadhan'), 0, 'short words must be exact');
+  assert.equal(nameScore('Rafa Arkan', 'Rafi Arkan'), 0);
+});
+
 test('students get the mailbox of their lembaga', () => {
   assert.deepEqual(departmentsFor(acc('Izyan Waiz Utomo'), members), ['legislatif']);
   assert.deepEqual(departmentsFor(acc('Muhammad Ali Ibrahim Alfatih'), members), ['yudikatif']);

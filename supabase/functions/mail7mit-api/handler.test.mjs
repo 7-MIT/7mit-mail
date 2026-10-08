@@ -5,8 +5,10 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 
 const PASS = { guru: 'g'.repeat(32), legislatif: 'l'.repeat(32), eksekutif: 'e'.repeat(32) };
-let handler; globalThis.__smtp = { calls: [] };
-globalThis.Deno = { env: { get: (k) => ({ SUPABASE_URL: 'http://x', SUPABASE_SERVICE_ROLE_KEY: 'k', MAIL_CREDENTIAL_KEY: crypto.randomBytes(32).toString('base64'), MAIL_DEFAULT_MAILBOXES: JSON.stringify(PASS) })[k] }, serve: (h) => { handler = h; } };
+const KEY = crypto.randomBytes(32).toString('base64');
+let handler; globalThis.__smtp = { calls: [] }; const ENV = {};
+globalThis.Deno = { env: { get: (k) => ({ SUPABASE_URL: 'http://x', SUPABASE_SERVICE_ROLE_KEY: 'k', MAIL_CREDENTIAL_KEY: KEY, MAIL_DEFAULT_MAILBOXES: JSON.stringify(PASS) })[k] }, serve: (h) => { handler = h; } };
+const realGet = globalThis.Deno.env.get; globalThis.Deno.env.get = (k) => (k in ENV ? ENV[k] : realGet(k));
 const { DB } = await import('./test-support/fake-supabase.mjs');
 await import('./index.ts');
 
@@ -75,4 +77,25 @@ test('default mailbox connects with IMAP over TLS and sends with STARTTLS on 587
   globalThis.__smtp.calls = []; globalThis.__smtp.fail = () => Object.assign(new Error('535 Authentication failed'), { code: 'EAUTH' });
   assert.notEqual((await call(T.guru, send)).status, 200, 'auth failures are not retried on another port');
   assert.equal(globalThis.__smtp.calls.length, 1); globalThis.__smtp.fail = null;
+});
+
+test('seedDefaults / testDefaults need the private sync token and keep passwords encrypted', async () => {
+  DB.mail7mit_sync_secret = [{ id: true, secret: 'sync-secret' }];
+  assert.equal((await call(null, { action: 'seedDefaults', passwords: PASS })).status, 401);
+  assert.equal((await call(null, { action: 'testDefaults', syncToken: 'wrong' })).status, 401);
+  ENV.MAIL_DEFAULT_MAILBOXES = '{}'; // prove the database is the only password source now
+  DB.mail7mit_default_mailboxes = [];
+  const seeded = await call(null, { action: 'seedDefaults', syncToken: 'sync-secret', passwords: { ...PASS, bogus: 'x'.repeat(32), kemenjira: 'short' } });
+  assert.equal(seeded.status, 200); assert.deepEqual(seeded.body.seeded.sort(), ['eksekutif', 'guru', 'legislatif']);
+  assert.equal(DB.mail7mit_default_mailboxes.length, 3);
+  assert.ok(!JSON.stringify(DB.mail7mit_default_mailboxes).includes(PASS.guru), 'stored encrypted, not plaintext');
+  // a seeded default mailbox now works with no env secret at all
+  globalThis.__smtp.calls = [];
+  assert.equal((await call(T.guru, { action: 'send', account: 'default:guru', to: 'a@b.cc', subject: 's', body: 'b', format: 'text', attachments: [] })).status, 200);
+  assert.equal(globalThis.__smtp.calls[0].user, 'guru@7mit.org');
+  const t = await call(null, { action: 'testDefaults', syncToken: 'sync-secret' });
+  assert.equal(t.status, 200);
+  assert.equal(t.body.results.guru.smtp, 'ok · 587 STARTTLS'); assert.equal(t.body.results.kemenjira.imap, 'not configured');
+  assert.ok(!JSON.stringify(t.body).includes(PASS.guru));
+  delete ENV.MAIL_DEFAULT_MAILBOXES;
 });
