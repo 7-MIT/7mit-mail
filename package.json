@@ -1,0 +1,39 @@
+{
+  "name": "7mit-mail",
+  "version": "1.0.0",
+  "description": "Self-hosted webmail for any IMAP/SMTP server",
+  "type": "module",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 --test-timeout=60000 test/unit.test.js test/e2e.test.js",
+    "start": "node server/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/7-MIT/7mit-mail.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/7-MIT/7mit-mail/issues"
+  },
+  "homepage": "https://github.com/7-MIT/7mit-mail#readme",
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "express": "^5.2.1",
+    "helmet": "^8.3.0",
+    "imapflow": "^2.2.10",
+    "jose": "^6.2.12",
+    "mailparser": "^3.9.36",
+    "multer": "^2.4.0",
+    "nodemailer": "^10.0.16",
+    "sanitize-html": "^2.18.0"
+  },
+  "devDependencies": {
+    "smtp-server": "^3.19.17"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "private": true
+}
