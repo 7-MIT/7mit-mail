@@ -48,7 +48,9 @@ test('akun.7mit login mode', async (t) => {
   }; };
   const call = mk();
 
-  assert.deepEqual((await call('GET', '/api/auth/config')).body, { akun: true, registration: false, akunUrl: null });
+  const cfg = (await call('GET', '/api/auth/config')).body;
+  assert.deepEqual(cfg.defaults, { imap: { host: 'imap.foundermail.mx', port: 993, secure: 'ssl' }, smtp: { host: 'smtp.foundermail.mx', port: 587, secure: 'starttls' } });
+  assert.equal(cfg.akun, true); assert.equal(cfg.registration, false);
   assert.equal((await call('POST', '/api/auth/register', { email: 'x@y.zz', password: 'long-enough-pass' })).status, 403, 'local sign-up disabled');
 
   // wrong password / unknown user -> same generic 401

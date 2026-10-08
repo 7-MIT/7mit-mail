@@ -23,6 +23,12 @@ export function createApp({ db = openDb(), key = loadMasterKey(), env = process.
     allowRegistration: env.ALLOW_REGISTRATION === '1',
     akunAuthUrl: env.AKUN_AUTH_URL, akunAuthApikey: env.AKUN_AUTH_APIKEY, akunPortalUrl: env.AKUN_PORTAL_URL,
   };
+  // Provider pre-filled for new mailboxes (users can still point an account at any other IMAP/SMTP server).
+  const defaults = {
+    imap: { host: env.DEFAULT_IMAP_HOST || 'imap.foundermail.mx', port: Number(env.DEFAULT_IMAP_PORT) || 993, secure: env.DEFAULT_IMAP_SECURE || 'ssl' },
+    smtp: { host: env.DEFAULT_SMTP_HOST || 'smtp.foundermail.mx', port: Number(env.DEFAULT_SMTP_PORT) || 587, secure: env.DEFAULT_SMTP_SECURE || 'starttls' },
+  };
+  cfg.defaults = defaults;
   const sync = new SyncManager(db, key);
   const auth = createAuth(db, cfg, key);
   const app = express();
@@ -66,19 +72,19 @@ export function createApp({ db = openDb(), key = loadMasterKey(), env = process.
   function parseAccountBody(b, existing) {
     const num = (v, d) => (Number.isInteger(Number(v)) && Number(v) > 0 && Number(v) < 65536 ? Number(v) : d);
     const sec = (v, d) => (SECURE.includes(v) ? v : d);
-    const imapSecure = sec(b.imap?.secure, existing?.imap_secure || 'ssl');
-    const smtpSecure = sec(b.smtp?.secure, existing?.smtp_secure || 'starttls');
+    const imapSecure = sec(b.imap?.secure, existing?.imap_secure || defaults.imap.secure);
+    const smtpSecure = sec(b.smtp?.secure, existing?.smtp_secure || defaults.smtp.secure);
     if ((imapSecure === 'none' || smtpSecure === 'none') && env.ALLOW_INSECURE !== '1') throw Object.assign(new Error('Unencrypted connections are disabled on this server'), { status: 400 });
     const email = String(b.email ?? existing?.email ?? '').trim().toLowerCase();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw Object.assign(new Error('Valid email address required'), { status: 400 });
     const imapUser = String(b.imap?.user ?? existing?.imap_user ?? email);
-    const imapHost = String(b.imap?.host ?? existing?.imap_host ?? '').trim();
-    const smtpHost = String(b.smtp?.host ?? existing?.smtp_host ?? '').trim();
+    const imapHost = String(b.imap?.host || existing?.imap_host || defaults.imap.host).trim();
+    const smtpHost = String(b.smtp?.host || existing?.smtp_host || defaults.smtp.host).trim();
     if (!imapHost || !smtpHost) throw Object.assign(new Error('IMAP and SMTP hosts are required'), { status: 400 });
     return {
       label: String(b.label || existing?.label || email).slice(0, 80), email, display_name: String(b.displayName ?? existing?.display_name ?? '').slice(0, 120),
-      imap_host: imapHost, imap_port: num(b.imap?.port, existing?.imap_port || (imapSecure === 'ssl' ? 993 : 143)), imap_secure: imapSecure, imap_user: imapUser,
-      smtp_host: smtpHost, smtp_port: num(b.smtp?.port, existing?.smtp_port || (smtpSecure === 'ssl' ? 465 : 587)), smtp_secure: smtpSecure,
+      imap_host: imapHost, imap_port: num(b.imap?.port, existing?.imap_port || (imapHost === defaults.imap.host ? defaults.imap.port : imapSecure === 'ssl' ? 993 : 143)), imap_secure: imapSecure, imap_user: imapUser,
+      smtp_host: smtpHost, smtp_port: num(b.smtp?.port, existing?.smtp_port || (smtpHost === defaults.smtp.host ? defaults.smtp.port : smtpSecure === 'ssl' ? 465 : 587)), smtp_secure: smtpSecure,
       smtp_user: String(b.smtp?.user ?? existing?.smtp_user ?? imapUser),
     };
   }

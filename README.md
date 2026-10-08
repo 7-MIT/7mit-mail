@@ -31,6 +31,9 @@ npm start                                      # http://127.0.0.1:3000
 Requires Node ≥ 22.13 (uses built-in `node:sqlite`). See `.env.example` for every setting. Docker: `docker build -t 7mit-mail . && docker run -p 3000:3000 -v mail7:/data -e MASTER_KEY=… 7mit-mail`.
 Put it behind a TLS-terminating reverse proxy (nginx/Caddy) and set `TRUST_PROXY=1`; disable proxy buffering for `/api/events`.
 
+## Default mail server
+New mailboxes are pre-filled with `imap.foundermail.mx:993` (SSL/TLS) and `smtp.foundermail.mx:587` (STARTTLS); the username defaults to the full address. Override with `DEFAULT_IMAP_*` / `DEFAULT_SMTP_*` (see `.env.example`). Users can still change the hosts for any other provider.
+
 ## Sign-in with akun.7mit
 akun.7mit authenticates through the `akun-auth` edge function on server.7mit: it looks the username up in `portal_login_accounts` (bcrypt `password_hash`, `active = true`) and creates a session token in `chat_user_sessions_v4`. This app reuses that function instead of reading the table itself, so it needs **no database or service-role credentials**.
 

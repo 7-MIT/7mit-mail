@@ -29,7 +29,7 @@
   M.find((m) => m.uid === 20).from = me;
   M.find((m) => m.uid === 30).to = [A('Pak Budi', 'budi@7mit.org')];
   const FOLDERS = [['INBOX', 'INBOX', 'inbox'], ['Drafts', 'Drafts', 'drafts'], ['Sent', 'Sent', 'sent'], ['Junk', 'Junk', 'junk'], ['Trash', 'Trash', 'trash'], ['Proyek OSIS', 'Proyek OSIS', null]];
-  const account = { id: 1, label: 'Surel 7 MIT', email: me.address, displayName: me.name, signature: 'Salam,\nSiswa 7 MIT', imap: { host: 'mail.7mit.org', port: 993, secure: 'ssl', user: me.address }, smtp: { host: 'mail.7mit.org', port: 587, secure: 'starttls', user: me.address }, lastSync: now, lastError: null };
+  const account = { id: 1, label: 'Surel 7 MIT', email: me.address, displayName: me.name, signature: 'Salam,\nSiswa 7 MIT', imap: { host: 'imap.foundermail.mx', port: 993, secure: 'ssl', user: me.address }, smtp: { host: 'smtp.foundermail.mx', port: 587, secure: 'starttls', user: me.address }, lastSync: now, lastError: null };
   const contacts = [['Ayu Lestari', 'ayu@7mit.org'], ['Pak Budi', 'budi@7mit.org'], ['Dewi Kartika', 'dewi@example.org'], ['Rizky', 'rizky@example.org']].map(([name, email], i) => ({ id: i + 1, name, email, notes: '' }));
   let settings = {};
 
@@ -39,7 +39,7 @@
 
   const route = (method, url, body) => {
     const path = url.replace(/^\/api/, '').split('?')[0]; const q = byQ(url); let m;
-    if (path === '/auth/config') return [200, { akun: true, registration: false, akunUrl: 'https://akun.7mit.org' }];
+    if (path === '/auth/config') return [200, { akun: true, registration: false, akunUrl: 'https://akun.7mit.org', defaults: { imap: { host: 'imap.foundermail.mx', port: 993, secure: 'ssl' }, smtp: { host: 'smtp.foundermail.mx', port: 587, secure: 'starttls' } } }];
     if (path === '/auth/login') { if (!body.username || !body.password) return [400, { error: 'Masukkan username akun.7mit dan password.' }]; if (body.password === 'salah') return [401, { error: 'Username atau password tidak sesuai.' }]; loggedIn = true; return [200, { ok: true }]; }
     if (path === '/auth/logout') { loggedIn = false; return [200, { ok: true }]; }
     if (!loggedIn) return [401, { error: 'Not signed in' }];

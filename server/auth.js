@@ -83,7 +83,7 @@ export function createAuth(db, cfg, key) {
   }
 
   const routes = (app) => {
-    app.get('/api/auth/config', (req, res) => res.json({ akun: akunMode, registration: !akunMode && cfg.allowRegistration, akunUrl: cfg.akunPortalUrl || null }));
+    app.get('/api/auth/config', (req, res) => res.json({ akun: akunMode, registration: !akunMode && cfg.allowRegistration, akunUrl: cfg.akunPortalUrl || null, defaults: cfg.defaults }));
 
     app.post('/api/auth/register', (req, res) => {
       if (akunMode || !cfg.allowRegistration) return res.status(403).json({ error: 'Registration is disabled' });

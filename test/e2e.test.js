@@ -153,7 +153,8 @@ test('webmail end-to-end', { skip: !up && 'no IMAP server on :1143' }, async (t)
   await new Promise((r) => setTimeout(r, 300));
   await seed.append('INBOX', mime('Pushed in real time'));
   await waitFor(() => events.some((e) => e.type === 'sync' && e.folder === 'INBOX'), 10000);
-  assert.equal((await call('GET', `/api/accounts/${id}/messages?folder=INBOX&limit=1`)).body.messages[0].subject, 'Pushed in real time');
+  // earlier actions in this test also emit sync events, so wait for the pushed message itself to show up
+  await waitFor(async () => (await call('GET', `/api/accounts/${id}/messages?folder=INBOX&limit=1`)).body.messages[0]?.subject === 'Pushed in real time', 10000);
   ctl.abort();
 
   // isolation: another user cannot touch this account

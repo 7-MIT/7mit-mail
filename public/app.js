@@ -42,6 +42,7 @@ const folderInfo = () => curFolders().find((f) => f.path === S.folder);
 
 // ---- boot -----------------------------------------------------------------
 async function boot() {
+  try { S.defaults = (await (await fetch('/api/auth/config')).json()).defaults; } catch { /* built-in fallback below */ }
   try { S.me = await api('GET', '/me'); } catch { S.me = null; }
   if (S.me) await loadAll();
   render();
@@ -261,7 +262,8 @@ function modal(title, body, footer, cls = '') {
 const field = (label, input) => h('div', {}, h('label', {}, label), input);
 
 function accountDialog(existing) {
-  const v = existing || { imap: { port: 993, secure: 'ssl' }, smtp: { port: 587, secure: 'starttls' } };
+  const D = S.defaults || { imap: { host: 'imap.foundermail.mx', port: 993, secure: 'ssl' }, smtp: { host: 'smtp.foundermail.mx', port: 587, secure: 'starttls' } };
+  const v = existing || { imap: { ...D.imap }, smtp: { ...D.smtp } };
   const f = {}; const mk = (name, props = {}) => (f[name] = h('input', { type: 'text', ...props }));
   const sel = (name, val) => (f[name] = h('select', {}, [['ssl', 'SSL/TLS'], ['starttls', 'STARTTLS'], ['none', 'Tanpa enkripsi (tidak disarankan)']].map(([k, t]) => h('option', { value: k, selected: val === k }, t))));
   const status = h('div', { class: 'muted', style: 'min-height:1.4em', role: 'status' });
@@ -270,13 +272,12 @@ function accountDialog(existing) {
   mk('shost', { value: v.smtp.host || '', placeholder: 'smtp.contoh.org' }); mk('sport', { type: 'number', value: v.smtp.port }); sel('ssec', v.smtp.secure); mk('suser', { value: v.smtp.user || '', placeholder: 'default: sama dengan IMAP' }); mk('spass', { type: 'password', autocomplete: 'new-password', placeholder: 'default: sama dengan IMAP' });
   f.isec.addEventListener('change', () => { if (!existing) f.iport.value = { ssl: 993, starttls: 143, none: 143 }[f.isec.value]; });
   f.ssec.addEventListener('change', () => { if (!existing) f.sport.value = { ssl: 465, starttls: 587, none: 25 }[f.ssec.value]; });
-  f.email.addEventListener('blur', () => { const dom = f.email.value.split('@')[1]; if (dom && !f.ihost.value && !existing) { f.ihost.value = 'mail.' + dom; f.shost.value = 'mail.' + dom; } });
   const payload = () => ({ label: f.label.value || f.email.value, email: f.email.value, displayName: f.displayName.value,
     imap: { host: f.ihost.value.trim(), port: +f.iport.value, secure: f.isec.value, user: f.iuser.value.trim() || f.email.value, password: f.ipass.value },
     smtp: { host: f.shost.value.trim(), port: +f.sport.value, secure: f.ssec.value, user: f.suser.value.trim() || f.iuser.value.trim() || f.email.value, password: f.spass.value || f.ipass.value } });
   const run = (fn) => async () => { status.textContent = 'Menghubungi server…'; try { await fn(); } catch (e) { status.textContent = e.message + (e.data?.details ? ` — IMAP: ${e.data.details.imap}; SMTP: ${e.data.details.smtp}` : ''); status.style.color = 'var(--danger)'; } };
   const m = modal(existing ? 'Ubah kotak surel' : 'Tambah kotak surel eksternal', h('div', {},
-    h('p', { class: 'muted' }, 'Sandi disimpan terenkripsi di server dan tidak pernah dikirim ke browser. Gunakan sandi aplikasi bila penyedia Anda mendukungnya.'),
+    h('p', { class: 'muted' }, existing ? '' : `Server bawaan: ${D.imap.host} (IMAP ${D.imap.port}) dan ${D.smtp.host} (SMTP ${D.smtp.port}). Ubah hanya bila kotak surel Anda ada di penyedia lain. `, 'Sandi disimpan terenkripsi di server dan tidak pernah dikirim ke browser.'),
     h('div', { class: 'grid2' }, field('Nama (label)', f.label), field('Alamat email', f.email)), field('Nama pengirim', f.displayName),
     h('h4', {}, 'Server masuk (IMAP)'), h('div', { class: 'grid2' }, field('Host', f.ihost), field('Port', f.iport), field('Enkripsi', f.isec), field('Username', f.iuser)), field('Sandi', f.ipass),
     h('h4', {}, 'Server keluar (SMTP)'), h('div', { class: 'grid2' }, field('Host', f.shost), field('Port', f.sport), field('Enkripsi', f.ssec), field('Username', f.suser)), field('Sandi', f.spass), status),
