@@ -1,6 +1,6 @@
 // 7 MIT Mail — dependency-free SPA. All mail traffic goes through the server's /api; no mail credentials ever live in the browser.
 const $app = document.getElementById('app');
-const S = { me: null, accounts: [], folders: {}, acc: null, folder: 'INBOX', msgs: [], hasMore: false, sel: null, open: null, q: '', filter: '', settings: {}, unread: 0, loading: false };
+const S = { me: null, accounts: [], folders: {}, acc: null, folder: 'INBOX', msgs: [], hasMore: false, sel: null, open: null, q: '', filter: '', settings: {}, unread: 0, loading: false, animate: true, fresh: new Set(), pop: null };
 
 // ---- tiny helpers ---------------------------------------------------------
 const h = (tag, props = {}, ...kids) => {
@@ -22,7 +22,7 @@ const api = async (method, path, body) => {
   if (!r.ok) throw Object.assign(new Error(data.error || `Error ${r.status}`), { data });
   return data;
 };
-const toast = (msg, err) => { const t = h('div', { class: 'toast' + (err ? ' err' : ''), role: 'status' }, msg); document.body.append(t); setTimeout(() => t.remove(), 3500); };
+const toast = (msg, err) => { const t = h('div', { class: 'toast' + (err ? ' err' : ''), role: 'status' }, msg); document.body.append(t); setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 300); }, 3200); };
 const guard = (fn) => async (...a) => { try { return await fn(...a); } catch (e) { toast(e.message, true); } };
 const qs = (o) => new URLSearchParams(Object.entries(o).filter(([, v]) => v != null && v !== '')).toString();
 const fmtDate = (ts) => { if (!ts) return ''; const d = new Date(ts * 1000), n = new Date(); return d.toDateString() === n.toDateString() ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : d.getFullYear() === n.getFullYear() ? d.toLocaleDateString([], { day: 'numeric', month: 'short' }) : d.toLocaleDateString(); };
@@ -57,13 +57,15 @@ function connectEvents() {
   es.onmessage = guard(async (ev) => {
     const e = JSON.parse(ev.data); const a = S.accounts.find((x) => x.id === e.accountId); if (!a) return;
     await refreshFolders(a);
+    let reloaded = false;
     if (e.type === 'sync' && e.accountId === S.acc && (!e.folder || e.folder === S.folder) && !S.q) {
+      reloaded = true;
       const before = new Set(S.msgs.map((m) => m.uid)); await loadMessages(true, true);
       const fresh = S.msgs.filter((m) => !before.has(m.uid) && !m.seen);
       if (fresh.length && before.size && S.settings.notifications && 'Notification' in window && Notification.permission === 'granted')
         new Notification(who(fresh[0].from), { body: fresh[0].subject, tag: 'mail7' });
     }
-    updateTitle(); renderSide(); renderList();
+    updateTitle(); renderSide(); if (!reloaded) renderList();
   });
 }
 const updateTitle = () => { const n = S.accounts.reduce((s, a) => s + (curFoldersOf(a.id).find((f) => f.special === 'inbox')?.unseen || 0), 0); document.title = (n ? `(${n}) ` : '') + '7 MIT Mail'; };
@@ -76,8 +78,10 @@ async function loadMessages(reset, quiet) {
   if (!quiet) { S.loading = true; renderList(); }
   try {
     const r = await api('GET', `/accounts/${S.acc}/messages?` + qs({ folder: S.folder, limit: S.settings.pageSize || 50, before: first, q: S.q, unread: S.filter === 'unread' ? 1 : '', starred: S.filter === 'starred' ? 1 : '' }));
+    if (quiet) { const had = new Set(S.msgs.map((m) => m.uid)); S.fresh = new Set(r.messages.filter((m) => !had.has(m.uid)).map((m) => m.uid)); S.animate = false; }
+    else { S.fresh = new Set(); S.animate = true; }
     S.msgs = reset ? r.messages : S.msgs.concat(r.messages); S.hasMore = r.hasMore;
-  } finally { S.loading = false; renderList(); }
+  } finally { S.loading = false; renderList(); S.animate = false; S.fresh = new Set(); }
 }
 const selectFolder = guard(async (accId, path) => { S.acc = accId; S.folder = path; S.q = ''; S.open = null; S.sel = null; S.filter = ''; document.querySelector('.shell')?.classList.remove('menu', 'reading'); await loadMessages(true); render(); });
 const openMsg = guard(async (m, images) => {
@@ -95,9 +99,10 @@ const setFlags = guard(async (uids, add, remove) => {
   await refreshFolders(S.accounts.find((a) => a.id === S.acc)); render();
 });
 const removeMsgs = guard(async (uids, to) => {
-  await api('POST', `/accounts/${S.acc}/messages/${to ? 'move' : 'delete'}`, { folder: S.folder, uids, to });
+  uids.forEach((u) => document.querySelector(`.row[data-uid="${u}"]`)?.classList.add('leaving'));
+  await Promise.all([api('POST', `/accounts/${S.acc}/messages/${to ? 'move' : 'delete'}`, { folder: S.folder, uids, to }), new Promise((r) => setTimeout(r, 280))]);
   S.msgs = S.msgs.filter((m) => !uids.includes(m.uid)); if (uids.includes(S.sel)) { S.sel = null; S.open = null; document.querySelector('.shell')?.classList.remove('reading'); }
-  await refreshFolders(S.accounts.find((a) => a.id === S.acc)); render(); toast(to ? 'Dipindahkan' : 'Dihapus');
+  await refreshFolders(S.accounts.find((a) => a.id === S.acc)); S.animate = false; render(); toast(to ? 'Dipindahkan' : 'Dihapus');
 });
 
 // ---- render ----------------------------------------------------------------
@@ -138,20 +143,22 @@ function renderList() {
     sel.length ? [h('button', { class: 'btn ghost', on: { click: () => setFlags(sel, ['seen'], []) } }, 'Dibaca'), h('button', { class: 'btn ghost danger', on: { click: () => removeMsgs(sel) } }, 'Hapus')]
       : [h('select', { 'aria-label': 'Filter', style: 'width:auto', on: { change: guard(async (e) => { S.filter = e.target.value; await loadMessages(true); }) } },
         [['', 'Semua'], ['unread', 'Belum dibaca'], ['starred', 'Berbintang']].map(([v, t]) => h('option', { value: v, selected: S.filter === v }, t))),
-      h('button', { class: 'btn ghost icon', title: 'Segarkan', on: { click: guard(async () => { await api('POST', `/accounts/${S.acc}/sync?` + qs({ folder: S.folder })); await refreshFolders(S.accounts.find((a) => a.id === S.acc)); await loadMessages(true); renderSide(); }) } }, '⟳')]));
+      h('button', { class: 'btn ghost icon', title: 'Segarkan', on: { click: guard(async (e) => { const b = e.currentTarget; b.classList.add('spin'); try { await api('POST', `/accounts/${S.acc}/sync?` + qs({ folder: S.folder })); await refreshFolders(S.accounts.find((a) => a.id === S.acc)); await loadMessages(true); renderSide(); } finally { b.classList.remove('spin'); } }) } }, '⟳')]));
   const rows = h('div', { class: 'rows' });
-  if (S.loading && !S.msgs.length) rows.append(h('div', { class: 'empty' }, 'Memuat…'));
-  else if (!S.msgs.length) rows.append(h('div', { class: 'empty' }, S.q ? 'Tidak ada hasil.' : 'Folder ini kosong.'));
+  if (S.loading && !S.msgs.length) for (let i = 0; i < 7; i++) rows.append(h('div', { class: 'skel', style: `animation-delay:${i * 80}ms` }));
+  else if (!S.msgs.length) rows.append(h('div', { class: 'empty' }, h('b', {}, S.q ? '🔍' : '✨'), S.q ? 'Tidak ada hasil.' : 'Folder ini kosong.'));
+  let idx = 0;
   for (const m of S.msgs) {
     const isSent = f?.special === 'sent' || f?.special === 'drafts';
     const open = () => draft(m) || openMsg(m);
-    rows.append(h('div', { class: `row${m.seen ? '' : ' unread'}${S.sel === m.uid ? ' on' : ''}`, role: 'button', tabindex: 0, on: { click: (e) => { if (!e.target.closest('input,.star')) open(); }, keydown: (e) => e.key === 'Enter' && open() } },
+    rows.append(h('div', { class: `row${m.seen ? '' : ' unread'}${S.sel === m.uid ? ' on' : ''}${S.fresh.has(m.uid) ? ' fresh' : S.animate ? ' enter' : ''}`, style: `--i:${Math.min(idx++, 14)}`, dataset: { uid: m.uid }, role: 'button', tabindex: 0, on: { click: (e) => { if (!e.target.closest('input,.star')) open(); }, keydown: (e) => e.key === 'Enter' && open() } },
       h('input', { type: 'checkbox', 'aria-label': 'Pilih', checked: !!m._sel, on: { change: (e) => { m._sel = e.target.checked; renderList(); } } }),
       h('div', { class: 'from' }, isSent ? `Kepada: ${m.to || '—'}` : who(m.from)),
       h('div', { class: 'date' }, (m.hasAttachments ? '📎 ' : '') + fmtDate(m.date)),
-      h('button', { class: 'star' + (m.flagged ? ' on' : ''), 'aria-label': 'Bintang', on: { click: () => setFlags([m.uid], m.flagged ? [] : ['flagged'], m.flagged ? ['flagged'] : []) } }, m.flagged ? '★' : '☆'),
+      h('button', { class: 'star' + (m.flagged ? ' on' : '') + (S.pop === m.uid ? ' pop' : ''), 'aria-label': 'Bintang', on: { click: () => { S.pop = m.flagged ? null : m.uid; setFlags([m.uid], m.flagged ? [] : ['flagged'], m.flagged ? ['flagged'] : []); } } }, m.flagged ? '★' : '☆'),
       h('div', { class: 'subj' }, m.subject || '(tanpa subjek)')));
   }
+  S.pop = null;
   if (S.hasMore) rows.append(h('div', { class: 'more' }, h('button', { class: 'btn', on: { click: guard(() => loadMessages(false)) } }, 'Muat lebih banyak')));
   el.append(rows);
 }
@@ -160,11 +167,12 @@ const draft = (m) => { if (folderInfo()?.special !== 'drafts') return false; ope
 function renderRead() {
   const el = document.getElementById('read'); if (!el) return;
   const d = S.open;
-  if (!d) return el.replaceChildren(h('div', { class: 'noread' }, 'Pilih surel untuk dibaca'));
-  if (d.loading) return el.replaceChildren(h('div', { class: 'noread' }, 'Memuat…'));
+  if (!d) return el.replaceChildren(h('div', { class: 'noread' }, h('div', {}, h('span', {}, '✉️'), 'Pilih surel untuk dibaca')));
+  if (d.loading) return el.replaceChildren(h('div', { class: 'noread' }, h('div', {}, h('i', { class: 'loader' }), 'Memuat…')));
   const m = S.msgs.find((x) => x.uid === d.uid) || { flagged: false };
   const other = curFolders().filter((f) => f.path !== S.folder);
   const iframe = d.html ? h('iframe', { sandbox: 'allow-same-origin allow-popups allow-popups-to-escape-sandbox', title: 'Isi surel', referrerpolicy: 'no-referrer' }) : null;
+  el.classList.remove('read-in'); void el.offsetWidth; if (S.readAnim !== d.uid) { S.readAnim = d.uid; el.classList.add('read-in'); }
   el.replaceChildren(...[
     h('div', { class: 'actions' },
       h('button', { class: 'btn ghost mobnav', on: { click: () => document.querySelector('.shell').classList.remove('reading') } }, '← Kembali'),
@@ -198,7 +206,7 @@ function authView() {
       e.preventDefault(); const f = e.target; err.textContent = '';
       const body = akun ? { username: f.username.value, password: f.password.value, account_key: f.account_key?.value } : { email: f.email.value, password: f.password.value };
       try { await api('POST', '/auth/' + mode, body); S.me = await api('GET', '/me'); await loadAll(); render(); connectEvents(); }
-      catch (x) { if (x.data?.selection_required) { choices = x.data.accounts; draw(cfg); } else err.textContent = x.message; }
+      catch (x) { if (x.data?.selection_required) { choices = x.data.accounts; draw(cfg); } else { err.textContent = x.message; box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake'); } }
     };
     const idField = akun
       ? [h('label', { for: 'em' }, 'Username akun.7mit'), h('input', { id: 'em', type: 'text', name: 'username', required: true, autocomplete: 'username', placeholder: 'nama atau nama@7mit', autocapitalize: 'none', spellcheck: 'false' })]
@@ -220,7 +228,7 @@ const logout = guard(async () => { await api('POST', '/auth/logout'); es?.close(
 
 // ---- dialogs ------------------------------------------------------------------
 function modal(title, body, footer, cls = '') {
-  const close = () => scrim.remove();
+  const close = () => { scrim.classList.add('closing'); setTimeout(() => scrim.remove(), 170); };
   const scrim = h('div', { class: 'scrim', on: { mousedown: (e) => e.target === scrim && close() } },
     h('div', { class: 'modal ' + cls, role: 'dialog', 'aria-modal': 'true', 'aria-label': title }, h('div', { class: 'modal-h' }, h('span', {}, title), h('button', { class: 'btn ghost icon', 'aria-label': 'Tutup', on: { click: close } }, '✕')), h('div', { class: 'modal-b' }, body), footer ? h('div', { class: 'modal-f' }, footer) : null));
   document.body.append(scrim); scrim.querySelector('input,textarea,button.btn:not(.icon)')?.focus(); return { close, scrim };
@@ -313,7 +321,7 @@ function composeWindow(o = {}) {
   const status = h('span', { class: 'muted' });
   const build = () => { const html = clean(ed.innerHTML); const fd = new FormData(); fd.append('payload', JSON.stringify({ to: iTo.value, cc: iCc.value, bcc: iBcc.value, subject: iSub.value, html, text: ed.innerText, inReplyTo, references, replyToUid, draftUid })); files.forEach((f) => fd.append('files', f, f.name)); return fd; };
   const win = h('div', { class: 'cwin' });
-  const close = () => { win.remove(); };
+  const close = () => { win.classList.add('closing'); setTimeout(() => win.remove(), 250); };
   const send = h('button', { class: 'btn primary', on: { click: async () => { send.disabled = true; status.textContent = 'Mengirim…'; try { const r = await api('POST', `/accounts/${acc.id}/send`, build()); close(); toast(r.savedToSent ? 'Terkirim' : 'Terkirim (salinan tidak tersimpan di Terkirim)'); if (S.acc === acc.id) { await refreshFolders(acc); if (folderInfo()?.special === 'sent') await loadMessages(true); render(); } } catch (e) { send.disabled = false; status.textContent = ''; toast(e.message, true); } } } }, 'Kirim');
   const saveDraft = h('button', { class: 'btn', on: { click: guard(async () => { const r = await api('POST', `/accounts/${acc.id}/drafts`, build()); draftUid = r.uid || undefined; status.textContent = 'Draf tersimpan'; await refreshFolders(acc); renderSide(); }) } }, 'Simpan draf');
   const fromSel = h('select', { 'aria-label': 'Dari', style: 'border:0', on: { change: () => { acc = S.accounts.find((a) => a.id === +fromSel.value); } } }, S.accounts.map((a) => h('option', { value: a.id, selected: a.id === acc.id }, `${a.displayName ? a.displayName + ' ' : ''}<${a.email}>`)));

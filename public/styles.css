@@ -24,7 +24,7 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 .toast.err{background:var(--danger)}
 
 /* auth */
-.auth{min-height:100%;display:grid;place-items:center;padding:20px;background:radial-gradient(1000px 500px at 20% -10%,#13417a55,transparent),var(--bg)}
+.auth{min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:20px;background:radial-gradient(1000px 500px at 20% -10%,#13417a55,transparent),var(--bg)}
 .auth .card{width:min(400px,100%);background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px;box-shadow:var(--shadow)}
 .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:20px}
 .logo i{width:34px;height:34px;border-radius:9px;background:var(--brand);display:grid;place-items:center;color:var(--accent2);font-style:normal}
@@ -107,3 +107,87 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
   .top .name{display:none}
 }
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* ===== motion ===== */
+:root{--ease:cubic-bezier(.22,1,.36,1);--spring:cubic-bezier(.34,1.56,.64,1)}
+body,.side,.list,.read,.row,.modal,.btn,input,select,textarea{transition:background-color .35s ease,color .35s ease,border-color .35s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideRow{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:none}}
+@keyframes slideIn{from{opacity:0;transform:translateX(22px)}to{opacity:1;transform:none}}
+@keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.6) rotate(-12deg)}100%{transform:scale(1)}}
+@keyframes pulse{0%{box-shadow:0 0 0 0 #0ea5e9aa}70%{box-shadow:0 0 0 7px #0ea5e900}100%{box-shadow:0 0 0 0 #0ea5e900}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes shimmer{to{background-position:-200% 0}}
+@keyframes flash{0%{background:#22d3ee55}100%{background:transparent}}
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes blob{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(40px,-30px) scale(1.15)}}
+@keyframes toastIn{from{opacity:0;transform:translate(-50%,24px) scale(.96)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes toastOut{to{opacity:0;transform:translate(-50%,16px) scale(.96)}}
+@keyframes popIn{from{opacity:0;transform:translateY(18px) scale(.95)}to{opacity:1;transform:none}}
+@keyframes popOut{to{opacity:0;transform:translateY(12px) scale(.96)}}
+@keyframes dock{from{transform:translateY(105%)}to{transform:none}}
+@keyframes shake{0%,100%{transform:none}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+@keyframes badge{0%{transform:scale(1)}50%{transform:scale(1.5)}100%{transform:scale(1)}}
+@keyframes draw{from{stroke-dashoffset:60}to{stroke-dashoffset:0}}
+
+.auth{position:relative;overflow:hidden}
+.auth::before,.auth::after{content:"";position:absolute;width:420px;height:420px;border-radius:50%;filter:blur(70px);opacity:.35;animation:blob 14s ease-in-out infinite;pointer-events:none}
+.auth::before{background:#0ea5e9;top:-120px;left:-100px}.auth::after{background:#22d3ee;bottom:-140px;right:-80px;animation-delay:-7s}
+.auth .card{position:relative;z-index:1;animation:fadeUp .7s var(--ease) both}
+.auth .card.shake{animation:shake .45s ease}
+.auth .card>*{animation:fadeUp .6s var(--ease) both}
+.auth .card>:nth-child(1){animation-delay:.08s}.auth .card>:nth-child(2){animation-delay:.16s}.auth .card>:nth-child(3){animation-delay:.24s}.auth .card>:nth-child(4){animation-delay:.32s}.auth .card>:nth-child(5){animation-delay:.4s}
+.logo i{animation:floaty 3.2s ease-in-out infinite}
+
+.shell{animation:fadeIn .5s ease both}
+.top{animation:fadeUp .5s var(--ease) both}
+.side{animation:slideRow .55s var(--ease) .05s both}
+.list{animation:fadeUp .55s var(--ease) .1s both}
+.fld{transition:background-color .2s,transform .25s var(--ease),padding .25s var(--ease)}
+.fld:hover{transform:translateX(4px)}
+.fld .n{animation:badge .5s var(--spring)}
+.fld span:first-child{transition:transform .3s var(--spring)}.fld:hover span:first-child{transform:scale(1.25) rotate(-6deg)}
+.acct>*{animation:slideRow .45s var(--ease) both}.acct>:nth-child(2){animation-delay:.05s}.acct>:nth-child(3){animation-delay:.1s}.acct>:nth-child(4){animation-delay:.15s}.acct>:nth-child(5){animation-delay:.2s}.acct>:nth-child(6){animation-delay:.25s}.acct>:nth-child(7){animation-delay:.3s}
+
+.btn{transition:background-color .2s,transform .18s var(--ease),box-shadow .25s,filter .2s}
+.btn:hover:not([disabled]){transform:translateY(-1px)}
+.btn:active:not([disabled]){transform:translateY(1px) scale(.96)}
+.btn.primary:hover{box-shadow:0 8px 22px #0ea5e955}
+.btn.primary.compose{background-size:200% 100%;transition:background-position .6s,transform .18s var(--ease),box-shadow .25s}
+.btn.primary.compose:hover{background-position:100% 0}
+.btn.spin{animation:spin .8s linear infinite}
+.btn.icon:hover{transform:rotate(12deg) scale(1.08)}
+.top .btn.icon:hover{transform:scale(1.15)}
+
+.row{transition:background-color .2s,transform .25s var(--ease),box-shadow .25s;position:relative}
+.row.enter{animation:slideRow .5s var(--ease) both;animation-delay:calc(var(--i,0)*38ms)}
+.row.fresh{animation:slideRow .5s var(--ease) both,flash 2.4s ease .4s both}
+.row:hover{transform:translateX(3px);box-shadow:inset 3px 0 0 var(--accent)}
+.row.on{box-shadow:inset 3px 0 0 var(--accent)}
+.row.leaving{animation:none;transition:all .28s var(--ease);opacity:0;transform:translateX(60px);max-height:0;padding-top:0;padding-bottom:0;overflow:hidden}
+.row.unread .from::before{animation:pulse 2.2s ease-out infinite}
+.star{transition:color .25s,transform .25s var(--spring)}.star:hover{transform:scale(1.3)}
+.star.pop{animation:pop .5s var(--spring)}
+.list-h h2{animation:fadeIn .4s ease both}
+.skel{height:64px;margin:0;border-bottom:1px solid var(--line);background:linear-gradient(90deg,transparent 0,var(--panel2) 40%,transparent 80%);background-size:200% 100%;animation:shimmer 1.3s linear infinite}
+.empty{animation:fadeUp .5s var(--ease) both}.empty b{display:block;font-size:34px;animation:floaty 3s ease-in-out infinite}
+
+.read-in>*{animation:slideIn .45s var(--ease) both}
+.read-in>:nth-child(2){animation-delay:.05s}.read-in>:nth-child(3){animation-delay:.1s}.read-in>:nth-child(4){animation-delay:.15s}.read-in>:nth-child(5){animation-delay:.2s}.read-in>:nth-child(6){animation-delay:.25s}
+.noread{animation:fadeIn .6s ease both}.noread span{display:block;font-size:56px;text-align:center;animation:floaty 3.5s ease-in-out infinite}
+.att{transition:transform .2s var(--ease),background-color .2s,box-shadow .2s}.att:hover{transform:translateY(-2px);box-shadow:0 6px 16px #0002}
+.banner{animation:fadeUp .5s var(--ease) both}
+.loader{display:inline-block;width:18px;height:18px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:-4px;margin-right:8px}
+
+.scrim{animation:fadeIn .2s ease both;backdrop-filter:blur(3px)}
+.scrim .modal{animation:popIn .35s var(--spring) both}
+.scrim.closing{animation:fadeIn .16s ease reverse both}.scrim.closing .modal{animation:popOut .16s ease both}
+.cwin{animation:dock .45s var(--ease) both}.cwin.closing{animation:dock .25s ease reverse both}
+.tabs button{transition:color .2s,border-color .25s}
+.item{animation:slideRow .4s var(--ease) both}
+.chip{animation:popIn .3s var(--spring) both}
+.toast{animation:toastIn .4s var(--spring) both}.toast.out{animation:toastOut .3s ease both}
+.fldr-new{animation:fadeUp .4s var(--ease) both}
+
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-delay:0s!important;animation-iteration-count:1!important;transition-duration:.001ms!important}}
