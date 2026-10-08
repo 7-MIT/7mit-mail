@@ -152,3 +152,30 @@ label{font-size:14px;color:#59687b}label input,label textarea,label select{borde
 @media(max-width:1100px){.message-list{width:320px}.welcome h2{font-size:27px}.welcome-features{gap:8px}.welcome-features span{font-size:12px}}
 @media(max-width:850px){.workspace{padding:0 10px 10px}.topbar{min-height:70px;height:70px;padding-inline:4px;gap:10px}.connection-bar{padding-inline:6px}.connection-type{display:none}.mail-panes{border-radius:15px}.message-list{width:100%}.email h2{font-size:24px}.reader-toolbar{gap:5px;padding-inline:12px}.move-select{width:145px}.message-open h3{font-size:15px}.row-top strong{max-width:calc(100% - 70px)}.compose-footer{flex-wrap:wrap}.compose-modal,.account-modal{padding:22px}[data-slot=dialog-title]{font-size:22px}.welcome>div.flex{flex-wrap:wrap;justify-content:center}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}.primary:hover:not(:disabled),.folder-button:hover,.side-link:hover,.new-folder:hover,.profile:hover,.secondary:hover,.reply-button:hover,.icon-button:hover,.welcome-features span:hover,.attachments button:hover,.files button:hover{transform:none}.primary::after{display:none}}
+
+/* ===== interaction layer (avatars, quick actions, drag & drop, ripple) ===== */
+.avatar.row{width:40px;height:40px;min-width:40px;margin:19px 0 0 16px;font-size:14px;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+.avatar.lg{width:46px;height:46px;min-width:46px;font-size:16px}
+.message-row{display:flex;align-items:flex-start;cursor:grab}
+.message-row:hover .avatar.row{transform:scale(1.08)}
+.message-row .message-open{flex:1;min-width:0;width:auto;padding-left:14px}
+.message-row.dragging{opacity:.4;transform:scale(.98)}
+.message-row.leaving{animation:none;transition:all .26s ease;opacity:0;transform:translateX(48px);max-height:0;overflow:hidden;border-bottom-width:0}
+.row-actions{position:absolute;right:44px;bottom:14px;display:flex;gap:2px;opacity:0;transform:translateX(8px);pointer-events:none;transition:opacity .2s,transform .25s ease}
+@media (hover:hover){.message-row:hover .row-actions,.message-row:focus-within .row-actions{opacity:1;transform:none;pointer-events:auto}}
+.row-actions .icon-button{background:#fff;box-shadow:0 1px 4px #0001}
+.row-actions .icon-button:hover{background:#f9edf1}
+.folder-button{transition:background .18s,color .18s,transform .22s cubic-bezier(.22,1,.36,1)}
+.folder-button:hover{transform:translateX(3px)}
+.folder-button.drop-target{background:#f1dde2;outline:2px dashed #8c2435;outline-offset:-2px;transform:scale(1.03)}
+.primary,.secondary,.icon-button,.compose-button{position:relative;overflow:hidden}
+.ripple{position:absolute;border-radius:50%;background:currentColor;opacity:.2;transform:scale(0);animation:mail-ripple .6s ease-out forwards;pointer-events:none}
+@keyframes mail-ripple{to{transform:scale(1);opacity:0}}
+kbd{font:600 12px ui-monospace,SFMono-Regular,Menlo,monospace;background:#f4f5f7;border:1px solid #e1e4e9;border-bottom-width:2px;border-radius:6px;padding:2px 8px;white-space:nowrap}
+.shortcut-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:11px 0;border-bottom:1px solid #edf0f3;font-size:14px}
+.primary:active,.secondary:active{transform:scale(.97)}
+.primary,.secondary{transition:background .18s,transform .15s}
+.empty-list svg{animation:turn 0s,mail-float 3.4s ease-in-out infinite}
+@keyframes mail-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.welcome-mark{animation:mail-float 4s ease-in-out infinite}
+.top-avatar{transition:transform .3s cubic-bezier(.34,1.56,.64,1)}.top-avatar:hover{transform:rotate(12deg) scale(1.1)}

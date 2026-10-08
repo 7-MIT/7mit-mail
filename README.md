@@ -1,5 +1,7 @@
 # mail.7mit
 
+> **Repository layout.** The project in this folder (Next.js frontend + Supabase Edge Function on server.7mit, login through akun.7mit) is the main codebase. `node-backend/` holds an alternative standalone Node.js IMAP/SMTP backend with its own UI and tests (persistent IMAP IDLE, SMTP on port 587). It is not used by this app; see `node-backend/README.md`.
+
 Responsive custom-provider webmail for the 7 MIT ecosystem. Incoming mail uses your IMAP server. Outgoing mail uses your SMTP server. All mail connections run in a Supabase Edge Function on server.7mit.
 
 ## Current delivery status
@@ -65,3 +67,11 @@ Frontend TypeScript check and Worker production build passed. Security tests cov
 ## Design update · 8 October 2026
 
 Premium burgundy mail surfaces, rounded panels, focused input states, animated folder navigation, staggered message entrances, message-reader transitions, loading skeletons, button hover/press feedback, starred-message feedback, animated dialogs/tabs/attachments, and styled folder/disconnect dialogs. Responsive layout and prefers-reduced-motion support are preserved. Motion only loops during loading.
+
+
+## Update: interaction layer and default servers
+
+- **Default servers.** The "Connect a mailbox" form is pre-filled with `imap.foundermail.mx:993` (TLS/SSL) and `smtp.foundermail.mx:587` (STARTTLS). Username defaults to the email address and the outgoing password to the incoming one.
+- **Port 587 on this host.** Supabase Edge Functions block outgoing SMTP ports 25 and 587. `mail7mit-api` now rewrites 587/25 to **TLS port 465** and tells the user, instead of rejecting the account. This only works if the provider also serves SMTP on 465; whether foundermail does has not been verified. If it does not, mail can be read but not sent from this deployment; the Node backend in `node-backend/` can use 587 directly.
+- **Needs a redeploy.** The 587 to 465 change is in `supabase/functions/mail7mit-api/index.ts` and takes effect only after the function is deployed. Until then the form still shows the 587 default and the old function rejects it with "Supabase blocks ports 25 and 587".
+- **Interface.** Initials avatars, hover quick actions (mark read/unread, trash), drag a message onto a folder to move it, keyboard shortcuts (`c`, `/`, `j`/`k`, `#`, `?`), button ripple, row exit animation, and debounced search (one IMAP search per pause instead of one per keystroke). Animations respect `prefers-reduced-motion`.

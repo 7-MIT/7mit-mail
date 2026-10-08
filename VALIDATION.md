@@ -16,3 +16,9 @@ Verified on 8 October 2026:
 - Sites registration/publication: blocked by Site Hosting usage limit.
 
 Design update: frontend TypeScript check and Worker build passed. The updated CSS includes a reduced-motion override for animations, transitions, pseudo-elements, and hover transforms. No backend change or new mailbox operation was introduced. Visual browser validation remains unavailable.
+
+## Update: interaction layer and default servers
+
+- `tsc --noEmit`: passed. `pnpm build`: passed. `security.test.mjs`: 3 passed. ESLint: same 23 pre-existing `no-explicit-any` errors as before the change, none added.
+- Browser run of the real Next.js app with `/api/mail` stubbed (the live server.7mit function is unreachable from the build sandbox): avatars render, hover actions appear, `j` opens the next message, `?` opens the shortcuts dialog, dragging a message onto Trash sends one `move` call, typing "budi" sends a single `messages` call, the form shows the foundermail defaults, and submitting with blank username/SMTP password fills them from the email and incoming password.
+- Not verified: the edge-function change (587 to 465) was not run or deployed; any connection to `imap.foundermail.mx` / `smtp.foundermail.mx`; whether foundermail accepts SMTP on port 465.
