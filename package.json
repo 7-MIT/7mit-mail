@@ -29,6 +29,7 @@
     "sanitize-html": "^2.18.0"
   },
   "devDependencies": {
+    "lucide-static": "^1.52.0",
     "smtp-server": "^3.19.17"
   },
   "engines": {

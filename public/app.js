@@ -1,4 +1,5 @@
 // 7 MIT Mail — dependency-free SPA. All mail traffic goes through the server's /api; no mail credentials ever live in the browser.
+import { icon as I } from './icons.js';
 const $app = document.getElementById('app');
 const S = { me: null, accounts: [], folders: {}, acc: null, folder: 'INBOX', msgs: [], hasMore: false, sel: null, open: null, q: '', filter: '', settings: {}, unread: 0, loading: false, animate: true, fresh: new Set(), pop: null };
 
@@ -29,8 +30,12 @@ const fmtDate = (ts) => { if (!ts) return ''; const d = new Date(ts * 1000), n =
 const who = (a) => a?.name || a?.address || '(tanpa pengirim)';
 const addr = (a) => (a.name ? `${a.name} <${a.address}>` : a.address);
 const bytes = (n) => (n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
-const FOLDER_ICON = { inbox: '📥', drafts: '📝', sent: '📤', junk: '🚫', trash: '🗑️', archive: '🗄️' };
+const FOLDER_ICON = { inbox: 'inbox', drafts: 'file-pen', sent: 'send', junk: 'shield-ban', trash: 'trash-2', archive: 'archive' };
 const FOLDER_LABEL = { inbox: 'Kotak Masuk', drafts: 'Draf', sent: 'Terkirim', junk: 'Spam', trash: 'Sampah', archive: 'Arsip' };
+const avatar = (a, size = '') => { const t = (a?.name || a?.address || '?').replace(/[^\p{L}\p{N} ]/gu, '').trim(); const w = t.split(/\s+/).filter(Boolean); const ini = ((w[0]?.[0] || '?') + (w.length > 1 ? w[w.length - 1][0] : '')).toUpperCase(); let hash = 0; for (const c of (a?.address || t)) hash = (hash * 31 + c.charCodeAt(0)) % 360; return h('div', { class: 'avatar ' + size, style: `--h:${hash}` }, ini); };
+const fileIcon = (a) => /image/.test(a.contentType) ? 'file-image' : /sheet|excel|csv/.test(a.contentType) ? 'file-spreadsheet' : /pdf|text|word/.test(a.contentType) ? 'file-text' : 'file';
+const isDark = () => (S.settings.theme ? S.settings.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches);
+document.addEventListener('pointerdown', (e) => { const b = e.target.closest?.('.btn'); if (!b || b.disabled) return; const r = b.getBoundingClientRect(); const d = Math.max(r.width, r.height) * 2; const s = h('span', { class: 'rip', style: `width:${d}px;height:${d}px;left:${e.clientX - r.left - d / 2}px;top:${e.clientY - r.top - d / 2}px` }); b.append(s); setTimeout(() => s.remove(), 650); });
 const applyTheme = () => { const t = S.settings.theme; if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; };
 const curFolders = () => S.folders[S.acc] || [];
 const folderInfo = () => curFolders().find((f) => f.path === S.folder);
@@ -106,57 +111,76 @@ const removeMsgs = guard(async (uids, to) => {
 });
 
 // ---- render ----------------------------------------------------------------
+let searchTimer;
+const toggleTheme = guard(async (e) => { const b = e.currentTarget; S.settings = { ...S.settings, theme: isDark() ? 'light' : 'dark' }; applyTheme(); b.replaceChildren(I(isDark() ? 'sun' : 'moon', 19, 'turn')); await api('PUT', '/settings', S.settings).catch(() => {}); });
 function render() {
   $app.replaceChildren();
   if (!S.me) return $app.append(authView());
-  if (!S.accounts.length) { $app.append(h('div', { class: 'auth' }, h('div', { class: 'card' }, h('div', { class: 'logo' }, h('i', {}, '✉'), '7 MIT Mail'), h('p', { class: 'muted' }, 'Hubungkan kotak surel pertama Anda lewat server IMAP/SMTP mana pun.'), h('button', { class: 'btn primary', on: { click: () => accountDialog() } }, 'Tambah kotak surel'), ' ', h('button', { class: 'btn', on: { click: logout } }, 'Keluar')))); return; }
+  if (!S.accounts.length) { $app.append(h('div', { class: 'auth' }, h('div', { class: 'card' }, h('div', { class: 'logo' }, h('i', {}, I('mail', 20)), '7 MIT Mail'), h('p', { class: 'muted' }, 'Hubungkan kotak surel pertama Anda lewat server IMAP/SMTP mana pun.'), h('button', { class: 'btn primary', on: { click: () => accountDialog() } }, 'Tambah kotak surel'), ' ', h('button', { class: 'btn', on: { click: logout } }, 'Keluar')))); return; }
   const shell = h('div', { class: 'shell' },
     h('header', { class: 'top' },
-      h('button', { class: 'btn ghost icon mobnav', 'aria-label': 'Menu', on: { click: () => shell.classList.toggle('menu') } }, '☰'),
-      h('div', { class: 'logo name' }, '✉ 7 MIT Mail'),
-      h('form', { class: 'search', role: 'search', on: { submit: guard(async (e) => { e.preventDefault(); S.q = e.target.q.value.trim(); await loadMessages(true); }) } },
-        h('input', { type: 'search', name: 'q', placeholder: 'Cari surel…', value: S.q, 'aria-label': 'Cari' })),
-      h('button', { class: 'btn ghost icon', title: 'Kontak', on: { click: contactsDialog } }, '👥'),
-      h('button', { class: 'btn ghost icon', title: 'Pengaturan', on: { click: settingsDialog } }, '⚙️')),
+      h('button', { class: 'btn ghost icon mobnav', 'aria-label': 'Menu', on: { click: () => shell.classList.toggle('menu') } }, I('menu', 20)),
+      h('div', { class: 'logo name' }, h('i', {}, I('mail', 17)), '7 MIT Mail'),
+      h('form', { class: 'search', role: 'search', on: { submit: guard(async (e) => { e.preventDefault(); clearTimeout(searchTimer); S.q = e.target.q.value.trim(); await loadMessages(true); }) } },
+        h('span', { class: 'search-ic' }, I('search', 16)),
+        h('input', { type: 'search', name: 'q', placeholder: 'Cari surel…  ( / )', value: S.q, 'aria-label': 'Cari', autocomplete: 'off', on: { input: (e) => { clearTimeout(searchTimer); searchTimer = setTimeout(guard(async () => { S.q = e.target.value.trim(); await loadMessages(true); }), 380); } } })),
+      h('button', { class: 'btn ghost icon theme-btn', title: 'Ganti tema', 'aria-label': 'Ganti tema', on: { click: toggleTheme } }, I(isDark() ? 'sun' : 'moon', 19)),
+      h('button', { class: 'btn ghost icon', title: 'Pintasan keyboard (?)', 'aria-label': 'Pintasan keyboard', on: { click: shortcutsDialog } }, I('keyboard', 19)),
+      h('button', { class: 'btn ghost icon', title: 'Kontak', 'aria-label': 'Kontak', on: { click: contactsDialog } }, I('users', 19)),
+      h('button', { class: 'btn ghost icon', title: 'Pengaturan', 'aria-label': 'Pengaturan', on: { click: settingsDialog } }, I('settings', 19))),
     h('nav', { class: 'side', id: 'side' }), h('section', { class: 'list', id: 'list' }), h('article', { class: 'read', id: 'read' }));
   $app.append(shell); renderSide(); renderList(); renderRead(); updateTitle();
 }
 function renderSide() {
   const side = document.getElementById('side'); if (!side) return;
-  side.replaceChildren(h('button', { class: 'btn primary compose', on: { click: () => composeWindow() } }, '✏️ Tulis'));
+  side.replaceChildren(h('button', { class: 'btn primary compose', on: { click: () => composeWindow() } }, I('pen-line', 18), 'Tulis'));
   for (const a of S.accounts) {
     const fl = curFoldersOf(a.id);
     side.append(h('div', { class: 'acct' },
-      h('div', { class: 'acct-h', title: a.lastError || a.email }, h('span', {}, a.label), a.lastError ? h('span', { class: 'err' }, '⚠') : null),
-      fl.map((f) => h('div', { class: 'fld' + (S.acc === a.id && S.folder === f.path ? ' on' : ''), role: 'button', tabindex: 0, on: { click: () => selectFolder(a.id, f.path), keydown: (e) => e.key === 'Enter' && selectFolder(a.id, f.path) } },
-        h('span', {}, FOLDER_ICON[f.special] || '📁'), h('span', {}, FOLDER_LABEL[f.special] || f.name),
-        f.unseen && f.special !== 'trash' ? h('span', { class: 'n' }, f.unseen) : null)),
-      h('div', { class: 'fld muted', role: 'button', tabindex: 0, on: { click: guard(async () => { const n = prompt('Nama folder baru'); if (!n) return; await api('POST', `/accounts/${a.id}/folders`, { name: n }); await refreshFolders(a); renderSide(); }) } }, '＋ Folder baru')));
+      h('div', { class: 'acct-h', title: a.lastError || a.email }, h('span', {}, a.label), a.lastError ? h('span', { class: 'err' }, I('circle-alert', 14)) : null),
+      fl.map((f) => { const el = h('div', { class: 'fld' + (S.acc === a.id && S.folder === f.path ? ' on' : ''), dataset: { path: f.path }, role: 'button', tabindex: 0, on: { click: () => selectFolder(a.id, f.path), keydown: (e) => e.key === 'Enter' && selectFolder(a.id, f.path) } },
+        I(FOLDER_ICON[f.special] || 'folder', 18), h('span', { class: 'lbl' }, FOLDER_LABEL[f.special] || f.name),
+        f.unseen && f.special !== 'trash' ? h('span', { class: 'n' }, f.unseen) : null);
+        if (a.id === S.acc) { // drop messages onto a folder to move them
+          el.addEventListener('dragover', (e) => { if (S.drag && f.path !== S.folder) { e.preventDefault(); el.classList.add('drop'); } });
+          el.addEventListener('dragleave', () => el.classList.remove('drop'));
+          el.addEventListener('drop', (e) => { e.preventDefault(); el.classList.remove('drop'); if (S.drag && f.path !== S.folder) removeMsgs(S.drag, f.path); });
+        }
+        return el; }),
+      h('div', { class: 'fld muted', role: 'button', tabindex: 0, on: { click: guard(async () => { const n = prompt('Nama folder baru'); if (!n) return; await api('POST', `/accounts/${a.id}/folders`, { name: n }); await refreshFolders(a); renderSide(); }) } }, I('folder-plus', 18), h('span', { class: 'lbl' }, 'Folder baru'))));
   }
 }
 function renderList() {
   const el = document.getElementById('list'); if (!el) return;
   const f = folderInfo(); const sel = S.msgs.filter((m) => m._sel).map((m) => m.uid);
   el.replaceChildren(h('div', { class: 'list-h' },
-    h('button', { class: 'btn ghost icon mobnav', 'aria-label': 'Folder', on: { click: () => document.querySelector('.shell').classList.add('menu') } }, '📂'),
+    h('button', { class: 'btn ghost icon mobnav', 'aria-label': 'Folder', on: { click: () => document.querySelector('.shell').classList.add('menu') } }, I('menu', 19)),
     h('h2', {}, S.q ? `Hasil: ${S.q}` : FOLDER_LABEL[f?.special] || f?.name || S.folder),
     sel.length ? [h('button', { class: 'btn ghost', on: { click: () => setFlags(sel, ['seen'], []) } }, 'Dibaca'), h('button', { class: 'btn ghost danger', on: { click: () => removeMsgs(sel) } }, 'Hapus')]
       : [h('select', { 'aria-label': 'Filter', style: 'width:auto', on: { change: guard(async (e) => { S.filter = e.target.value; await loadMessages(true); }) } },
         [['', 'Semua'], ['unread', 'Belum dibaca'], ['starred', 'Berbintang']].map(([v, t]) => h('option', { value: v, selected: S.filter === v }, t))),
-      h('button', { class: 'btn ghost icon', title: 'Segarkan', on: { click: guard(async (e) => { const b = e.currentTarget; b.classList.add('spin'); try { await api('POST', `/accounts/${S.acc}/sync?` + qs({ folder: S.folder })); await refreshFolders(S.accounts.find((a) => a.id === S.acc)); await loadMessages(true); renderSide(); } finally { b.classList.remove('spin'); } }) } }, '⟳')]));
+      h('button', { class: 'btn ghost icon', title: 'Segarkan', on: { click: guard(async (e) => { const b = e.currentTarget; b.classList.add('spin'); try { await api('POST', `/accounts/${S.acc}/sync?` + qs({ folder: S.folder })); await refreshFolders(S.accounts.find((a) => a.id === S.acc)); await loadMessages(true); renderSide(); } finally { b.classList.remove('spin'); } }) } }, I('refresh-cw', 17))]));
   const rows = h('div', { class: 'rows' });
   if (S.loading && !S.msgs.length) for (let i = 0; i < 7; i++) rows.append(h('div', { class: 'skel', style: `animation-delay:${i * 80}ms` }));
-  else if (!S.msgs.length) rows.append(h('div', { class: 'empty' }, h('b', {}, S.q ? '🔍' : '✨'), S.q ? 'Tidak ada hasil.' : 'Folder ini kosong.'));
+  else if (!S.msgs.length) rows.append(h('div', { class: 'empty' }, h('b', {}, I(S.q ? 'search-x' : 'sparkles', 40)), S.q ? 'Tidak ada hasil.' : 'Folder ini kosong.'));
   let idx = 0;
   for (const m of S.msgs) {
     const isSent = f?.special === 'sent' || f?.special === 'drafts';
     const open = () => draft(m) || openMsg(m);
-    rows.append(h('div', { class: `row${m.seen ? '' : ' unread'}${S.sel === m.uid ? ' on' : ''}${S.fresh.has(m.uid) ? ' fresh' : S.animate ? ' enter' : ''}`, style: `--i:${Math.min(idx++, 14)}`, dataset: { uid: m.uid }, role: 'button', tabindex: 0, on: { click: (e) => { if (!e.target.closest('input,.star')) open(); }, keydown: (e) => e.key === 'Enter' && open() } },
-      h('input', { type: 'checkbox', 'aria-label': 'Pilih', checked: !!m._sel, on: { change: (e) => { m._sel = e.target.checked; renderList(); } } }),
+    const flag = () => { S.pop = m.flagged ? null : m.uid; setFlags([m.uid], m.flagged ? [] : ['flagged'], m.flagged ? ['flagged'] : []); };
+    const row = h('div', { class: `row${m.seen ? '' : ' unread'}${S.sel === m.uid ? ' on' : ''}${m._sel ? ' picked' : ''}${S.fresh.has(m.uid) ? ' fresh' : S.animate ? ' enter' : ''}`, style: `--i:${Math.min(idx++, 14)}`, dataset: { uid: m.uid }, role: 'button', tabindex: 0, draggable: 'true',
+      on: { click: (e) => { if (!e.target.closest('input,.star,.quick,.avatar')) open(); }, keydown: (e) => e.key === 'Enter' && open(),
+        dragstart: (e) => { const picked = S.msgs.filter((x) => x._sel).map((x) => x.uid); S.drag = picked.includes(m.uid) ? picked : [m.uid]; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(m.uid)); row.classList.add('dragging'); document.body.classList.add('dragging-mail'); },
+        dragend: () => { S.drag = null; row.classList.remove('dragging'); document.body.classList.remove('dragging-mail'); document.querySelectorAll('.fld.drop').forEach((x) => x.classList.remove('drop')); } } },
+      h('div', { class: 'lead' }, avatar(isSent ? m.to.split(',')[0] && { address: m.to.split(',')[0].trim() } : m.from), h('input', { type: 'checkbox', 'aria-label': 'Pilih', checked: !!m._sel, on: { change: (e) => { m._sel = e.target.checked; renderList(); } } })),
       h('div', { class: 'from' }, isSent ? `Kepada: ${m.to || '—'}` : who(m.from)),
-      h('div', { class: 'date' }, (m.hasAttachments ? '📎 ' : '') + fmtDate(m.date)),
-      h('button', { class: 'star' + (m.flagged ? ' on' : '') + (S.pop === m.uid ? ' pop' : ''), 'aria-label': 'Bintang', on: { click: () => { S.pop = m.flagged ? null : m.uid; setFlags([m.uid], m.flagged ? [] : ['flagged'], m.flagged ? ['flagged'] : []); } } }, m.flagged ? '★' : '☆'),
-      h('div', { class: 'subj' }, m.subject || '(tanpa subjek)')));
+      h('div', { class: 'meta-r' }, m.hasAttachments ? I('paperclip', 13) : null, h('span', { class: 'date' }, fmtDate(m.date)),
+        h('button', { class: 'star' + (m.flagged ? ' on' : '') + (S.pop === m.uid ? ' pop' : ''), 'aria-label': 'Bintang', on: { click: flag } }, I('star', 17))),
+      h('div', { class: 'subj' }, m.subject || '(tanpa subjek)'),
+      h('div', { class: 'quick' },
+        h('button', { class: 'btn ghost icon', title: m.seen ? 'Tandai belum dibaca' : 'Tandai dibaca', 'aria-label': 'Tandai', on: { click: () => setFlags([m.uid], m.seen ? [] : ['seen'], m.seen ? ['seen'] : []) } }, I(m.seen ? 'mail' : 'mail-open', 16)),
+        h('button', { class: 'btn ghost icon danger', title: 'Hapus', 'aria-label': 'Hapus', on: { click: () => removeMsgs([m.uid]) } }, I('trash-2', 16))));
+    rows.append(row);
   }
   S.pop = null;
   if (S.hasMore) rows.append(h('div', { class: 'more' }, h('button', { class: 'btn', on: { click: guard(() => loadMessages(false)) } }, 'Muat lebih banyak')));
@@ -167,7 +191,7 @@ const draft = (m) => { if (folderInfo()?.special !== 'drafts') return false; ope
 function renderRead() {
   const el = document.getElementById('read'); if (!el) return;
   const d = S.open;
-  if (!d) return el.replaceChildren(h('div', { class: 'noread' }, h('div', {}, h('span', {}, '✉️'), 'Pilih surel untuk dibaca')));
+  if (!d) return el.replaceChildren(h('div', { class: 'noread' }, h('div', {}, h('span', {}, I('mail-open', 60)), 'Pilih surel untuk dibaca')));
   if (d.loading) return el.replaceChildren(h('div', { class: 'noread' }, h('div', {}, h('i', { class: 'loader' }), 'Memuat…')));
   const m = S.msgs.find((x) => x.uid === d.uid) || { flagged: false };
   const other = curFolders().filter((f) => f.path !== S.folder);
@@ -175,19 +199,20 @@ function renderRead() {
   el.classList.remove('read-in'); void el.offsetWidth; if (S.readAnim !== d.uid) { S.readAnim = d.uid; el.classList.add('read-in'); }
   el.replaceChildren(...[
     h('div', { class: 'actions' },
-      h('button', { class: 'btn ghost mobnav', on: { click: () => document.querySelector('.shell').classList.remove('reading') } }, '← Kembali'),
-      h('button', { class: 'btn', on: { click: () => composeWindow({ mode: 'reply', d }) } }, '↩ Balas'),
-      h('button', { class: 'btn', on: { click: () => composeWindow({ mode: 'all', d }) } }, '↩↩ Balas semua'),
-      h('button', { class: 'btn', on: { click: () => composeWindow({ mode: 'fwd', d }) } }, '↪ Teruskan'),
-      h('button', { class: 'btn', on: { click: () => setFlags([d.uid], m.flagged ? [] : ['flagged'], m.flagged ? ['flagged'] : []) } }, m.flagged ? '★ Bintang' : '☆ Bintang'),
-      h('button', { class: 'btn', on: { click: () => setFlags([d.uid], [], ['seen']) } }, 'Tandai belum dibaca'),
+      h('button', { class: 'btn ghost mobnav', on: { click: () => document.querySelector('.shell').classList.remove('reading') } }, I('arrow-left', 17), 'Kembali'),
+      h('button', { class: 'btn', on: { click: () => composeWindow({ mode: 'reply', d }) } }, I('reply', 17), 'Balas'),
+      h('button', { class: 'btn', on: { click: () => composeWindow({ mode: 'all', d }) } }, I('reply-all', 17), 'Balas semua'),
+      h('button', { class: 'btn', on: { click: () => composeWindow({ mode: 'fwd', d }) } }, I('forward', 17), 'Teruskan'),
+      h('button', { class: 'btn' + (m.flagged ? ' starred' : ''), on: { click: () => { S.pop = m.flagged ? null : d.uid; setFlags([d.uid], m.flagged ? [] : ['flagged'], m.flagged ? ['flagged'] : []); } } }, I('star', 17, m.flagged ? 'fill' : ''), 'Bintang'),
+      h('button', { class: 'btn', on: { click: () => setFlags([d.uid], [], ['seen']) } }, I('mail', 17), 'Belum dibaca'),
       h('select', { style: 'width:auto', 'aria-label': 'Pindahkan ke', on: { change: (e) => e.target.value && removeMsgs([d.uid], e.target.value) } }, h('option', { value: '' }, 'Pindahkan ke…'), other.map((f) => h('option', { value: f.path }, FOLDER_LABEL[f.special] || f.name))),
-      h('button', { class: 'btn danger', on: { click: () => removeMsgs([d.uid]) } }, '🗑 Hapus')),
+      h('button', { class: 'btn danger', on: { click: () => removeMsgs([d.uid]) } }, I('trash-2', 17), 'Hapus')),
     h('div', { class: 'read-h' }, h('h1', {}, d.subject || '(tanpa subjek)'),
+      h('div', { class: 'sender' }, avatar(d.from[0], 'lg'), h('div', { class: 'sender-t' },
       h('div', { class: 'meta' }, h('b', {}, d.from.map(addr).join(', ')), ' · ', d.date ? new Date(d.date).toLocaleString() : ''),
-      h('div', { class: 'meta' }, 'Kepada: ', d.to.map(addr).join(', ')), d.cc.length ? h('div', { class: 'meta' }, 'Cc: ', d.cc.map(addr).join(', ')) : null),
-    d.blockedImages ? h('div', { class: 'banner' }, `${d.blockedImages} gambar eksternal diblokir untuk melindungi privasi.`, h('button', { class: 'btn', on: { click: () => openMsg(S.msgs.find((x) => x.uid === d.uid), true) } }, 'Tampilkan gambar')) : null,
-    d.attachments.filter((a) => !a.inline).length ? h('div', { class: 'atts' }, d.attachments.filter((a) => !a.inline).map((a) => h('a', { class: 'att', href: `/api/accounts/${S.acc}/messages/${d.uid}/attachments/${a.index}?` + qs({ folder: S.folder }), download: a.filename }, '📎 ', a.filename, h('span', { class: 'muted' }, bytes(a.size))))) : null,
+      h('div', { class: 'meta' }, 'Kepada: ', d.to.map(addr).join(', ')), d.cc.length ? h('div', { class: 'meta' }, 'Cc: ', d.cc.map(addr).join(', ')) : null))),
+    d.blockedImages ? h('div', { class: 'banner' }, I('image-off', 17), `${d.blockedImages} gambar eksternal diblokir untuk melindungi privasi.`, h('button', { class: 'btn', on: { click: () => openMsg(S.msgs.find((x) => x.uid === d.uid), true) } }, 'Tampilkan gambar')) : null,
+    d.attachments.filter((a) => !a.inline).length ? h('div', { class: 'atts' }, d.attachments.filter((a) => !a.inline).map((a) => h('a', { class: 'att', href: `/api/accounts/${S.acc}/messages/${d.uid}/attachments/${a.index}?` + qs({ folder: S.folder }), download: a.filename }, I(fileIcon(a), 17), a.filename, h('span', { class: 'muted' }, bytes(a.size))))) : null,
     h('div', { class: 'body' }, iframe || h('pre', {}, d.text || '(kosong)'))].filter(Boolean));
   if (iframe) {
     const fix = () => { try { const dd = iframe.contentDocument; iframe.style.height = dd.documentElement.scrollHeight + 8 + 'px'; } catch { /* ignore */ } };
@@ -211,7 +236,7 @@ function authView() {
     const idField = akun
       ? [h('label', { for: 'em' }, 'Username akun.7mit'), h('input', { id: 'em', type: 'text', name: 'username', required: true, autocomplete: 'username', placeholder: 'nama atau nama@7mit', autocapitalize: 'none', spellcheck: 'false' })]
       : [h('label', { for: 'em' }, 'Email'), h('input', { id: 'em', type: 'email', name: 'email', required: true, autocomplete: 'username' })];
-    box.replaceChildren(...[h('div', { class: 'logo' }, h('i', {}, '✉'), '7 MIT Mail'),
+    box.replaceChildren(...[h('div', { class: 'logo' }, h('i', {}, I('mail', 20)), '7 MIT Mail'),
       h('p', { class: 'muted' }, akun ? 'Masuk dengan akun.7mit Anda.' : mode === 'login' ? 'Masuk untuk membuka surel Anda.' : 'Buat akun baru.'),
       h('form', { on: { submit } }, ...idField,
         h('label', { for: 'pw' }, 'Kata sandi'), h('input', { id: 'pw', type: 'password', name: 'password', required: true, minlength: mode === 'register' ? 10 : 1, autocomplete: mode === 'login' ? 'current-password' : 'new-password' }),
@@ -230,7 +255,7 @@ const logout = guard(async () => { await api('POST', '/auth/logout'); es?.close(
 function modal(title, body, footer, cls = '') {
   const close = () => { scrim.classList.add('closing'); setTimeout(() => scrim.remove(), 170); };
   const scrim = h('div', { class: 'scrim', on: { mousedown: (e) => e.target === scrim && close() } },
-    h('div', { class: 'modal ' + cls, role: 'dialog', 'aria-modal': 'true', 'aria-label': title }, h('div', { class: 'modal-h' }, h('span', {}, title), h('button', { class: 'btn ghost icon', 'aria-label': 'Tutup', on: { click: close } }, '✕')), h('div', { class: 'modal-b' }, body), footer ? h('div', { class: 'modal-f' }, footer) : null));
+    h('div', { class: 'modal ' + cls, role: 'dialog', 'aria-modal': 'true', 'aria-label': title }, h('div', { class: 'modal-h' }, h('span', {}, title), h('button', { class: 'btn ghost icon', 'aria-label': 'Tutup', on: { click: close } }, I('x', 18))), h('div', { class: 'modal-b' }, body), footer ? h('div', { class: 'modal-f' }, footer) : null));
   document.body.append(scrim); scrim.querySelector('input,textarea,button.btn:not(.icon)')?.focus(); return { close, scrim };
 }
 const field = (label, input) => h('div', {}, h('label', {}, label), input);
@@ -266,7 +291,7 @@ function settingsDialog() {
     accounts: () => h('div', { style: 'padding:8px 4px' }, S.accounts.map((a) => h('div', { class: 'item' }, h('div', {}, h('b', {}, a.label), h('div', { class: 'muted' }, `${a.email} · ${a.imap.host}`), a.lastError ? h('div', { style: 'color:var(--danger);font-size:13px' }, a.lastError) : null),
       h('button', { class: 'btn', on: { click: () => { m.close(); accountDialog(a); } } }, 'Ubah'),
       h('button', { class: 'btn danger', on: { click: guard(async () => { if (!confirm(`Hapus ${a.email} dari 7 MIT Mail? Surel di server asal tidak terhapus.`)) return; await api('DELETE', `/accounts/${a.id}`); m.close(); await loadAll(); render(); }) } }, 'Hapus'))),
-      h('p', {}, h('button', { class: 'btn primary', on: { click: () => { m.close(); accountDialog(); } } }, '＋ Tambah kotak surel eksternal')), h('p', {}, h('button', { class: 'btn', on: { click: () => { m.close(); logout(); } } }, 'Keluar'))),
+      h('p', {}, h('button', { class: 'btn primary', on: { click: () => { m.close(); accountDialog(); } } }, I('plus', 17), 'Tambah kotak surel eksternal')), h('p', {}, h('button', { class: 'btn', on: { click: () => { m.close(); logout(); } } }, 'Keluar'))),
     sig: () => { const a = S.accounts.find((x) => x.id === S.acc) || S.accounts[0]; const sel = h('select', {}, S.accounts.map((x) => h('option', { value: x.id, selected: x.id === a.id }, x.email))); const ta = h('textarea', { rows: 6, placeholder: 'Salam hangat,\nNama' }, a.signature);
       sel.addEventListener('change', () => { ta.value = S.accounts.find((x) => x.id === +sel.value).signature; });
       return h('div', { style: 'padding:8px 4px' }, field('Untuk akun', sel), field('Tanda tangan (teks)', ta), h('p', {}, h('button', { class: 'btn primary', on: { click: guard(async () => { await api('PUT', `/accounts/${sel.value}/signature`, { signature: ta.value }); S.accounts.find((x) => x.id === +sel.value).signature = ta.value; toast('Tersimpan'); }) } }, 'Simpan'))); },
@@ -315,21 +340,21 @@ function composeWindow(o = {}) {
   // quoted original is already sanitized server-side; re-sanitize the composed HTML defensively on the client
   const clean = (html) => { const t = document.createElement('template'); t.innerHTML = html; t.content.querySelectorAll('script,iframe,object,embed,form,style,link,meta').forEach((n) => n.remove()); t.content.querySelectorAll('*').forEach((n) => [...n.attributes].forEach((a) => { if (/^on/i.test(a.name) || /^\s*javascript:/i.test(a.value)) n.removeAttribute(a.name); })); return t.innerHTML; };
   ed.innerHTML = clean(ed.innerHTML);
-  const attBox = h('div'); const drawAtt = () => attBox.replaceChildren(...files.map((f, i) => h('span', { class: 'chip' }, f.name, ' ', h('span', { class: 'muted' }, bytes(f.size)), h('button', { 'aria-label': 'Hapus lampiran', on: { click: () => { files.splice(i, 1); drawAtt(); } } }, '✕'))));
+  const attBox = h('div'); const drawAtt = () => attBox.replaceChildren(...files.map((f, i) => h('span', { class: 'chip' }, f.name, ' ', h('span', { class: 'muted' }, bytes(f.size)), h('button', { 'aria-label': 'Hapus lampiran', on: { click: () => { files.splice(i, 1); drawAtt(); } } }, I('x', 13)))));
   const picker = h('input', { type: 'file', multiple: true, class: 'hidden', on: { change: () => { for (const f of picker.files) { if (f.size > 25 * 1048576) toast(`${f.name} melebihi 25 MB`, true); else files.push(f); } picker.value = ''; drawAtt(); } } });
   const cmd = (c, v) => { ed.focus(); document.execCommand(c, false, v); };
   const status = h('span', { class: 'muted' });
   const build = () => { const html = clean(ed.innerHTML); const fd = new FormData(); fd.append('payload', JSON.stringify({ to: iTo.value, cc: iCc.value, bcc: iBcc.value, subject: iSub.value, html, text: ed.innerText, inReplyTo, references, replyToUid, draftUid })); files.forEach((f) => fd.append('files', f, f.name)); return fd; };
   const win = h('div', { class: 'cwin' });
   const close = () => { win.classList.add('closing'); setTimeout(() => win.remove(), 250); };
-  const send = h('button', { class: 'btn primary', on: { click: async () => { send.disabled = true; status.textContent = 'Mengirim…'; try { const r = await api('POST', `/accounts/${acc.id}/send`, build()); close(); toast(r.savedToSent ? 'Terkirim' : 'Terkirim (salinan tidak tersimpan di Terkirim)'); if (S.acc === acc.id) { await refreshFolders(acc); if (folderInfo()?.special === 'sent') await loadMessages(true); render(); } } catch (e) { send.disabled = false; status.textContent = ''; toast(e.message, true); } } } }, 'Kirim');
+  const send = h('button', { class: 'btn primary', on: { click: async () => { send.disabled = true; status.textContent = 'Mengirim…'; try { const r = await api('POST', `/accounts/${acc.id}/send`, build()); close(); toast(r.savedToSent ? 'Terkirim' : 'Terkirim (salinan tidak tersimpan di Terkirim)'); if (S.acc === acc.id) { await refreshFolders(acc); if (folderInfo()?.special === 'sent') await loadMessages(true); render(); } } catch (e) { send.disabled = false; status.textContent = ''; toast(e.message, true); } } } }, I('send', 16), 'Kirim');
   const saveDraft = h('button', { class: 'btn', on: { click: guard(async () => { const r = await api('POST', `/accounts/${acc.id}/drafts`, build()); draftUid = r.uid || undefined; status.textContent = 'Draf tersimpan'; await refreshFolders(acc); renderSide(); }) } }, 'Simpan draf');
   const fromSel = h('select', { 'aria-label': 'Dari', style: 'border:0', on: { change: () => { acc = S.accounts.find((a) => a.id === +fromSel.value); } } }, S.accounts.map((a) => h('option', { value: a.id, selected: a.id === acc.id }, `${a.displayName ? a.displayName + ' ' : ''}<${a.email}>`)));
-  win.append(h('div', { class: 'modal' }, h('div', { class: 'modal-h' }, h('span', {}, 'Surel baru'), h('button', { class: 'btn ghost icon', 'aria-label': 'Tutup', on: { click: () => { if (!ed.innerText.trim() && !iTo.value || confirm('Tutup tanpa mengirim? Perubahan yang belum disimpan akan hilang.')) close(); } } }, '✕')),
+  win.append(h('div', { class: 'modal' }, h('div', { class: 'modal-h' }, h('span', {}, 'Surel baru'), h('button', { class: 'btn ghost icon', 'aria-label': 'Tutup', on: { click: () => { if (!ed.innerText.trim() && !iTo.value || confirm('Tutup tanpa mengirim? Perubahan yang belum disimpan akan hilang.')) close(); } } }, I('x', 18))),
     h('div', { class: 'modal-b' }, dl, h('div', { class: 'cf' }, h('span', {}, 'Dari'), fromSel), h('div', { class: 'cf' }, h('span', {}, 'Kepada'), iTo), h('div', { class: 'cf' }, h('span', {}, 'Cc'), iCc), h('div', { class: 'cf' }, h('span', {}, 'Bcc'), iBcc), h('div', { class: 'cf' }, h('span', {}, 'Subjek'), iSub),
-      h('div', { class: 'tb' }, [['B', 'bold'], ['I', 'italic'], ['U', 'underline'], ['•', 'insertUnorderedList'], ['1.', 'insertOrderedList']].map(([t, c]) => h('button', { type: 'button', 'aria-label': c, on: { mousedown: (e) => e.preventDefault(), click: () => cmd(c) } }, t)),
-        h('button', { type: 'button', on: { mousedown: (e) => e.preventDefault(), click: () => { const u = prompt('Alamat tautan (https://…)'); if (u && /^(https?:|mailto:)/i.test(u)) cmd('createLink', u); } } }, '🔗')), ed, attBox),
-    h('div', { class: 'modal-f' }, send, h('button', { class: 'btn', on: { click: () => picker.click() } }, '📎 Lampirkan'), picker, saveDraft, status)));
+      h('div', { class: 'tb' }, [['bold', 'bold'], ['italic', 'italic'], ['underline', 'underline'], ['list', 'insertUnorderedList'], ['list-ordered', 'insertOrderedList']].map(([t, c]) => h('button', { type: 'button', 'aria-label': c, title: c, on: { mousedown: (e) => e.preventDefault(), click: () => cmd(c) } }, I(t, 17))),
+        h('button', { type: 'button', on: { mousedown: (e) => e.preventDefault(), click: () => { const u = prompt('Alamat tautan (https://…)'); if (u && /^(https?:|mailto:)/i.test(u)) cmd('createLink', u); } } }, I('link', 17))), ed, attBox),
+    h('div', { class: 'modal-f' }, send, h('button', { class: 'btn', on: { click: () => picker.click() } }, I('paperclip', 16), 'Lampirkan'), picker, saveDraft, status)));
   document.body.append(win); (to ? ed : iTo).focus();
 }
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -338,9 +363,14 @@ const openDraft = guard(async (m) => {
   composeWindow({ to: d.to.map(addr).join(', '), subject: d.subject, html: d.html || esc(d.text).replace(/\n/g, '<br>'), draftUid: m.uid });
 });
 
+function shortcutsDialog() {
+  const rows = [['c', 'Tulis surel baru'], ['/', 'Cari'], ['j / k', 'Surel berikutnya / sebelumnya'], ['#', 'Hapus surel terbuka'], ['?', 'Tampilkan bantuan ini'], ['Enter', 'Buka surel terpilih'], ['Seret', 'Seret surel ke folder untuk memindahkan']];
+  modal('Pintasan keyboard', h('div', {}, rows.map(([k, t]) => h('div', { class: 'item' }, h('div', {}, t), h('kbd', {}, k)))));
+}
 document.addEventListener('keydown', (e) => {
   if (!S.me || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable || e.metaKey || e.ctrlKey) return;
   if (e.key === 'c') { e.preventDefault(); composeWindow(); }
+  if (e.key === '?') { e.preventDefault(); shortcutsDialog(); }
   if (e.key === '/') { e.preventDefault(); document.querySelector('.search input')?.focus(); }
   if ((e.key === 'j' || e.key === 'k') && S.msgs.length) { const i = S.msgs.findIndex((m) => m.uid === S.sel); const n = S.msgs[Math.max(0, Math.min(S.msgs.length - 1, i + (e.key === 'j' ? 1 : -1)))]; openMsg(n); }
   if (e.key === '#' && S.sel) removeMsgs([S.sel]);
