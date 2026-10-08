@@ -5,11 +5,12 @@ export function openDb(file = process.env.DB_FILE || './data/mail.db') {
   db.exec(`
     PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
     CREATE TABLE IF NOT EXISTS users(
-      id INTEGER PRIMARY KEY, email TEXT UNIQUE NOT NULL, pw_hash TEXT, external_id TEXT UNIQUE,
+      id INTEGER PRIMARY KEY, email TEXT NOT NULL, display_name TEXT NOT NULL DEFAULT '', pw_hash TEXT, external_id TEXT UNIQUE,
       created_at INTEGER NOT NULL DEFAULT (unixepoch()));
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_local_email ON users(email) WHERE external_id IS NULL;
     CREATE TABLE IF NOT EXISTS sessions(
       token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      expires_at INTEGER NOT NULL);
+      expires_at INTEGER NOT NULL, akun_token_enc TEXT, checked_at INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE IF NOT EXISTS accounts(
       id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       label TEXT NOT NULL, email TEXT NOT NULL, display_name TEXT NOT NULL DEFAULT '',

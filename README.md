@@ -1,7 +1,7 @@
 # 7 MIT Mail
 
 Self-hosted webmail that talks to **any IMAP/SMTP server** (your own domain, Dovecot/Postfix, mailcow, cPanel, Gmail with app passwords, …).
-Intended home: `mail.7mit.org`, signing in through `akun.7mit`, with an "Add external mailbox" page for arbitrary accounts.
+Intended home: `mail.7mit.org`, signing in with the akun.7mit account, with an "Add external mailbox" page for arbitrary accounts.
 
 ```
 Browser (SPA)  ──HTTPS/JSON+SSE──▶  Node backend  ──IMAP (IDLE) / SMTP──▶  your mail servers
@@ -25,16 +25,22 @@ The browser never sees IMAP/SMTP credentials and never opens mail sockets; only 
 ```bash
 npm ci
 export MASTER_KEY=$(openssl rand -base64 32)   # keep it safe & stable
-export ALLOW_REGISTRATION=1                    # or configure SSO, see below
+export AKUN_AUTH_URL=https://lajzrempjyoqkubkumhb.supabase.co/functions/v1/akun-auth   # or ALLOW_REGISTRATION=1 for local accounts
 npm start                                      # http://127.0.0.1:3000
 ```
 Requires Node ≥ 22.13 (uses built-in `node:sqlite`). See `.env.example` for every setting. Docker: `docker build -t 7mit-mail . && docker run -p 3000:3000 -v mail7:/data -e MASTER_KEY=… 7mit-mail`.
 Put it behind a TLS-terminating reverse proxy (nginx/Caddy) and set `TRUST_PROXY=1`; disable proxy buffering for `/api/events`.
 
 ## Sign-in with akun.7mit
-Set `SSO_JWKS_URL` (or `SSO_JWT_SECRET` for HS256), plus `SSO_ISSUER` / `SSO_AUDIENCE` if you want them enforced. Any request carrying `Authorization: Bearer <jwt>` is accepted; the user is created on first sight from the `sub` and `email` claims.
-**Assumption:** I don't know akun.7mit's token format, so this is a generic JWT verifier. A redirect-based login handoff (cookie/token exchange from akun.7mit to this app) still needs to be wired to however akun.7mit issues sessions. Local email+password accounts (`ALLOW_REGISTRATION=1`) work independently.
-This project does not touch the existing `mail7mit_*` tables in the 7 MIT Supabase project.
+akun.7mit authenticates through the `akun-auth` edge function on server.7mit: it looks the username up in `portal_login_accounts` (bcrypt `password_hash`, `active = true`) and creates a session token in `chat_user_sessions_v4`. This app reuses that function instead of reading the table itself, so it needs **no database or service-role credentials**.
+
+- Set `AKUN_AUTH_URL`. The login form then asks for the akun.7mit username (`name` or `name@7mit`) and password. If one username has several account types (Siswa/Guru/Pengurus) the user picks one, exactly like akun.7mit.
+- On success the backend creates its own session and keeps the akun.7mit token (encrypted). Every 5 minutes it re-validates that token, so **revoking the device in akun.7mit, changing the password there, or deactivating the account signs the user out of mail too**. Logging out here revokes only the token this login created.
+- A user is identified by `account_key` (a Siswa and a Guru account with the same username get separate mailbox lists). The browser's IP and user agent are forwarded so the entry in akun.7mit's device list is meaningful.
+- `Authorization: Bearer <akun.7mit session token>` is also accepted, for a future hand-off from akun.7mit to `mail.7mit.org` without retyping the password.
+- Failed logins are rate limited here (10 / 15 min per IP+username) on top of akun.7mit's own delays.
+- This project does not touch the existing `mail7mit_*` tables.
+- Not verified against the live function: the build sandbox could not reach server.7mit, so the integration is tested against a mock that follows the `akun-auth` source. Run one real login after deploying.
 
 ## Security model
 | Concern | Handling |

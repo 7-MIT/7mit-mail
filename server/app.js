@@ -21,10 +21,10 @@ export function createApp({ db = openDb(), key = loadMasterKey(), env = process.
   const cfg = {
     secureCookies: env.COOKIE_SECURE !== '0' && env.NODE_ENV === 'production',
     allowRegistration: env.ALLOW_REGISTRATION === '1',
-    ssoJwksUrl: env.SSO_JWKS_URL, ssoJwtSecret: env.SSO_JWT_SECRET, ssoIssuer: env.SSO_ISSUER, ssoAudience: env.SSO_AUDIENCE, ssoLoginUrl: env.SSO_LOGIN_URL,
+    akunAuthUrl: env.AKUN_AUTH_URL, akunAuthApikey: env.AKUN_AUTH_APIKEY, akunPortalUrl: env.AKUN_PORTAL_URL,
   };
   const sync = new SyncManager(db, key);
-  const auth = createAuth(db, cfg);
+  const auth = createAuth(db, cfg, key);
   const app = express();
   app.disable('x-powered-by');
   if (env.TRUST_PROXY) app.set('trust proxy', Number(env.TRUST_PROXY) || env.TRUST_PROXY);
@@ -84,7 +84,7 @@ export function createApp({ db = openDb(), key = loadMasterKey(), env = process.
   }
 
   // ---- session info
-  app.get('/api/me', (req, res) => res.json({ id: req.user.id, email: req.user.email }));
+  app.get('/api/me', (req, res) => res.json({ id: req.user.id, email: req.user.email, name: req.user.display_name }));
 
   // ---- accounts
   app.get('/api/accounts', (req, res) => res.json(db.prepare('SELECT * FROM accounts WHERE user_id=? ORDER BY id').all(req.user.id).map(publicAccount)));

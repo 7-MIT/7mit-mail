@@ -190,15 +190,27 @@ function renderRead() {
 
 // ---- auth -------------------------------------------------------------------
 function authView() {
-  let mode = 'login'; const box = h('div', { class: 'card' });
+  let mode = 'login'; let choices = null; const box = h('div', { class: 'card' });
   const draw = (cfg) => {
+    const akun = !!cfg.akun;
     const err = h('div', { class: 'muted', style: 'color:var(--danger);min-height:1.4em', role: 'alert' });
-    box.replaceChildren(...[h('div', { class: 'logo' }, h('i', {}, '✉'), '7 MIT Mail'), h('p', { class: 'muted' }, mode === 'login' ? 'Masuk untuk membuka surel Anda.' : 'Buat akun baru.'),
-      h('form', { on: { submit: async (e) => { e.preventDefault(); try { await api('POST', '/auth/' + mode, { email: e.target.email.value, password: e.target.password.value }); S.me = await api('GET', '/me'); await loadAll(); render(); connectEvents(); } catch (x) { err.textContent = x.message; } } } },
-        h('label', { for: 'em' }, 'Email'), h('input', { id: 'em', type: 'email', name: 'email', required: true, autocomplete: 'username' }),
+    const submit = async (e) => {
+      e.preventDefault(); const f = e.target; err.textContent = '';
+      const body = akun ? { username: f.username.value, password: f.password.value, account_key: f.account_key?.value } : { email: f.email.value, password: f.password.value };
+      try { await api('POST', '/auth/' + mode, body); S.me = await api('GET', '/me'); await loadAll(); render(); connectEvents(); }
+      catch (x) { if (x.data?.selection_required) { choices = x.data.accounts; draw(cfg); } else err.textContent = x.message; }
+    };
+    const idField = akun
+      ? [h('label', { for: 'em' }, 'Username akun.7mit'), h('input', { id: 'em', type: 'text', name: 'username', required: true, autocomplete: 'username', placeholder: 'nama atau nama@7mit', autocapitalize: 'none', spellcheck: 'false' })]
+      : [h('label', { for: 'em' }, 'Email'), h('input', { id: 'em', type: 'email', name: 'email', required: true, autocomplete: 'username' })];
+    box.replaceChildren(...[h('div', { class: 'logo' }, h('i', {}, '✉'), '7 MIT Mail'),
+      h('p', { class: 'muted' }, akun ? 'Masuk dengan akun.7mit Anda.' : mode === 'login' ? 'Masuk untuk membuka surel Anda.' : 'Buat akun baru.'),
+      h('form', { on: { submit } }, ...idField,
         h('label', { for: 'pw' }, 'Kata sandi'), h('input', { id: 'pw', type: 'password', name: 'password', required: true, minlength: mode === 'register' ? 10 : 1, autocomplete: mode === 'login' ? 'current-password' : 'new-password' }),
+        choices ? h('fieldset', { style: 'border:1px solid var(--line);border-radius:8px;margin:10px 0' }, h('legend', { class: 'muted' }, 'Pilih jenis akun'),
+          choices.map((c, i) => h('label', { style: 'display:flex;gap:8px;align-items:center;color:var(--ink);font-size:inherit' }, h('input', { type: 'radio', name: 'account_key', value: c.account_key, required: true, checked: i === 0, style: 'width:auto' }), c.label || c.account_type))) : null,
         err, h('button', { class: 'btn primary', style: 'width:100%;justify-content:center;margin-top:8px' }, mode === 'login' ? 'Masuk' : 'Daftar')),
-      cfg.sso && typeof cfg.sso === 'string' ? h('p', {}, h('a', { href: cfg.sso }, 'Masuk dengan akun.7mit')) : null,
+      cfg.akunUrl ? h('p', { class: 'muted' }, 'Lupa sandi atau belum punya akun? ', h('a', { href: cfg.akunUrl, rel: 'noopener' }, 'Buka akun.7mit')) : null,
       cfg.registration ? h('p', { class: 'muted' }, mode === 'login' ? 'Belum punya akun? ' : 'Sudah punya akun? ', h('a', { href: '#', on: { click: (e) => { e.preventDefault(); mode = mode === 'login' ? 'register' : 'login'; draw(cfg); } } }, mode === 'login' ? 'Daftar' : 'Masuk')) : null].filter(Boolean));
   };
   fetch('/api/auth/config').then((r) => r.json()).then(draw).catch(() => draw({}));
@@ -220,7 +232,7 @@ function accountDialog(existing) {
   const f = {}; const mk = (name, props = {}) => (f[name] = h('input', { type: 'text', ...props }));
   const sel = (name, val) => (f[name] = h('select', {}, [['ssl', 'SSL/TLS'], ['starttls', 'STARTTLS'], ['none', 'Tanpa enkripsi (tidak disarankan)']].map(([k, t]) => h('option', { value: k, selected: val === k }, t))));
   const status = h('div', { class: 'muted', style: 'min-height:1.4em', role: 'status' });
-  mk('label', { value: v.label || '' }); mk('email', { type: 'email', value: v.email || '' }); mk('displayName', { value: v.displayName || '' });
+  mk('label', { value: v.label || '' }); mk('email', { type: 'email', value: v.email || '' }); mk('displayName', { value: v.displayName ?? S.me?.name ?? '' });
   mk('ihost', { value: v.imap.host || '', placeholder: 'imap.contoh.org' }); mk('iport', { type: 'number', value: v.imap.port }); sel('isec', v.imap.secure); mk('iuser', { value: v.imap.user || '', placeholder: 'default: alamat email' }); mk('ipass', { type: 'password', autocomplete: 'new-password', placeholder: existing ? '(tidak diubah)' : '' });
   mk('shost', { value: v.smtp.host || '', placeholder: 'smtp.contoh.org' }); mk('sport', { type: 'number', value: v.smtp.port }); sel('ssec', v.smtp.secure); mk('suser', { value: v.smtp.user || '', placeholder: 'default: sama dengan IMAP' }); mk('spass', { type: 'password', autocomplete: 'new-password', placeholder: 'default: sama dengan IMAP' });
   f.isec.addEventListener('change', () => { if (!existing) f.iport.value = { ssl: 993, starttls: 143, none: 143 }[f.isec.value]; });
