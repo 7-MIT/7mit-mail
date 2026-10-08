@@ -1,0 +1,15 @@
+{
+  // Cloudflare Workers config for mail.7mit (vinext build output, NOT OpenNext).
+  // Without this file Cloudflare auto-detects Next.js and runs `opennextjs-cloudflare build`, which this project does not use.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "7mit-mail",
+  "main": "dist/server/index.js",
+  "compatibility_date": "2026-05-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "no_bundle": true,
+  "rules": [{ "type": "ESModule", "globs": ["**/*.js", "**/*.mjs"] }],
+  "assets": { "directory": "dist/client" },
+  "observability": { "enabled": true },
+  // `wrangler deploy` builds first, so the dashboard's Build command can stay empty.
+  "build": { "command": "pnpm build" }
+}
