@@ -21,7 +21,8 @@ export function createApp({ db = openDb(), key = loadMasterKey(), env = process.
   const cfg = {
     secureCookies: env.COOKIE_SECURE !== '0' && env.NODE_ENV === 'production',
     allowRegistration: env.ALLOW_REGISTRATION === '1',
-    akunAuthUrl: env.AKUN_AUTH_URL, akunAuthApikey: env.AKUN_AUTH_APIKEY, akunPortalUrl: env.AKUN_PORTAL_URL,
+    // akun.7mit is the default sign-in; AUTH_MODE=local switches to local email+password accounts (dev/self-hosted)
+    akunAuthUrl: env.AKUN_AUTH_URL || (env.AUTH_MODE === 'local' ? '' : 'https://lajzrempjyoqkubkumhb.supabase.co/functions/v1/akun-auth'), akunAuthApikey: env.AKUN_AUTH_APIKEY, akunPortalUrl: env.AKUN_PORTAL_URL || 'https://akun.7mit.org',
   };
   // Provider pre-filled for new mailboxes (users can still point an account at any other IMAP/SMTP server).
   const defaults = {
@@ -373,6 +374,11 @@ export function createApp({ db = openDb(), key = loadMasterKey(), env = process.
   // ---- static UI + errors
   app.use(express.static(path.join(here, '..', 'public'), { extensions: ['html'], maxAge: '5m' }));
   app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
+  // Any other page address (/mail, /login, a refreshed deep link) opens the app instead of a bare 404.
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' || path.extname(req.path) || !req.accepts('html')) return next();
+    res.sendFile(path.join(here, '..', 'public', 'index.html'));
+  });
   app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
     const status = err.status || (err.code === 'LIMIT_FILE_SIZE' ? 413 : 500);
     if (status >= 500) console.error(err.stack || err);

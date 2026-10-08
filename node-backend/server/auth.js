@@ -107,6 +107,7 @@ export function createAuth(db, cfg, key) {
         catch { return res.status(502).json({ error: 'akun.7mit tidak dapat dihubungi. Coba lagi.' }); }
         if (r.status === 409 && r.data.selection_required) return res.status(409).json({ selection_required: true, accounts: r.data.accounts });
         if (r.status === 401) { fail(k); return res.status(401).json({ error: 'Username atau password tidak sesuai.' }); }
+        if (r.status === 404) return res.status(502).json({ error: 'Alamat layanan akun.7mit salah (404). Periksa AKUN_AUTH_URL; harus berakhir dengan /functions/v1/akun-auth.' });
         if (r.status !== 200 || !r.data.token || !r.data.profile?.account_key) return res.status(502).json({ error: r.data.error || 'Login akun.7mit gagal.' });
         startSession(res, upsertAkunUser(r.data.profile).id, r.data.token);
         return res.json({ ok: true });

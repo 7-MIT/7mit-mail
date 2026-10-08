@@ -37,13 +37,25 @@ New mailboxes are pre-filled with `imap.foundermail.mx:993` (SSL/TLS) and `smtp.
 ## Sign-in with akun.7mit
 akun.7mit authenticates through the `akun-auth` edge function on server.7mit: it looks the username up in `portal_login_accounts` (bcrypt `password_hash`, `active = true`) and creates a session token in `chat_user_sessions_v4`. This app reuses that function instead of reading the table itself, so it needs **no database or service-role credentials**.
 
-- Set `AKUN_AUTH_URL`. The login form then asks for the akun.7mit username (`name` or `name@7mit`) and password. If one username has several account types (Siswa/Guru/Pengurus) the user picks one, exactly like akun.7mit.
+- akun.7mit is the **default** sign-in (`AKUN_AUTH_URL` defaults to the server.7mit function; `AUTH_MODE=local` switches to local accounts for development). The login form asks for the akun.7mit username (`name` or `name@7mit`) and password. If one username has several account types (Siswa/Guru/Pengurus) the user picks one, exactly like akun.7mit.
 - On success the backend creates its own session and keeps the akun.7mit token (encrypted). Every 5 minutes it re-validates that token, so **revoking the device in akun.7mit, changing the password there, or deactivating the account signs the user out of mail too**. Logging out here revokes only the token this login created.
 - A user is identified by `account_key` (a Siswa and a Guru account with the same username get separate mailbox lists). The browser's IP and user agent are forwarded so the entry in akun.7mit's device list is meaningful.
 - `Authorization: Bearer <akun.7mit session token>` is also accepted, for a future hand-off from akun.7mit to `mail.7mit.org` without retyping the password.
 - Failed logins are rate limited here (10 / 15 min per IP+username) on top of akun.7mit's own delays.
 - This project does not touch the existing `mail7mit_*` tables.
 - Not verified against the live function: the build sandbox could not reach server.7mit, so the integration is tested against a mock that follows the `akun-auth` source. Run one real login after deploying.
+
+## Works with Dovecot
+Tested against a real Dovecot 2.3 (`npm test`, needs `dev/dovecot/setup.sh` or any Dovecot on `127.0.0.1:1143`): akun.7mit sign-in, connecting the mailbox, SPECIAL-USE folders (Drafts/Sent/Trash/Junk), unread counters, flags, move, delete, search, send plus copy to Sent, and IDLE push of new mail.
+
+Check **your own** Dovecot (or any IMAP/SMTP server) before blaming the app. The password stays in an environment variable:
+```bash
+MAIL_PASS='…' npm run check -- --user you@example.com --imap imap.foundermail.mx:993 --smtp smtp.foundermail.mx:587
+```
+It reports sign-in, IDLE/MOVE/SPECIAL-USE support, the folder mapping, INBOX counts and, for SMTP, whether 587/STARTTLS or 465/TLS works.
+
+## Page not found
+Any page address that is not an API call (`/mail`, `/login`, a refreshed deep link) opens the app instead of a 404; unknown `/api/...` calls return a JSON 404. A 404 on `/api/...` or on sign-in almost always means the app is being served as static files (GitHub Pages, a CDN) instead of by `npm start`, or `AKUN_AUTH_URL` is wrong (it must end in `/functions/v1/akun-auth`; the app now says so).
 
 ## Security model
 | Concern | Handling |

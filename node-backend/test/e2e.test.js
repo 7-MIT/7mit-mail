@@ -11,6 +11,7 @@ import { simpleParser } from 'mailparser';
 process.env.ALLOW_PRIVATE_HOSTS = '1';
 process.env.ALLOW_INSECURE = '1';
 process.env.ALLOW_REGISTRATION = '1';
+process.env.AUTH_MODE = 'local';
 const { createApp } = await import('../server/app.js');
 const { openDb } = await import('../server/db.js');
 

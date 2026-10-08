@@ -4,8 +4,9 @@
   "description": "Self-hosted webmail for any IMAP/SMTP server",
   "type": "module",
   "scripts": {
-    "test": "node --test --test-concurrency=1 --test-timeout=60000 test/unit.test.js test/akun.test.js test/e2e.test.js",
-    "start": "node server/index.js"
+    "test": "node --test --test-concurrency=1 --test-timeout=60000 test/unit.test.js test/akun.test.js test/akun-dovecot.test.js test/e2e.test.js",
+    "start": "node server/index.js",
+    "check": "node scripts/check-mail.mjs"
   },
   "repository": {
     "type": "git",
