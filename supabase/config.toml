@@ -1,0 +1,3 @@
+[functions.mail7mit-api]
+verify_jwt = false
+# Custom authentication: validates a live akun.7mit session for every private action.

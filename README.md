@@ -1,67 +1,67 @@
-# 7 MIT Mail
+# mail.7mit
 
-Self-hosted webmail that talks to **any IMAP/SMTP server** (your own domain, Dovecot/Postfix, mailcow, cPanel, Gmail with app passwords, …).
-Intended home: `mail.7mit.org`, signing in with the akun.7mit account, with an "Add external mailbox" page for arbitrary accounts.
+Responsive custom-provider webmail for the 7 MIT ecosystem. Incoming mail uses your IMAP server. Outgoing mail uses your SMTP server. All mail connections run in a Supabase Edge Function on server.7mit.
 
-```
-Browser (SPA)  ──HTTPS/JSON+SSE──▶  Node backend  ──IMAP (IDLE) / SMTP──▶  your mail servers
-                                       │
-                                  SQLite: users, sessions, encrypted creds, header cache, contacts
-```
+## Current delivery status
 
-The browser never sees IMAP/SMTP credentials and never opens mail sockets; only the backend does.
+- Frontend builds successfully as a Cloudflare-compatible Worker.
+- `mail7mit-api` is deployed at `https://lajzrempjyoqkubkumhb.supabase.co/functions/v1/mail7mit-api`.
+- akun.7mit login is integrated with the existing `akun-auth` service.
+- Database tables, encrypted credential storage, and a background-sync schedule are configured in server.7mit.
+- Sites publication is blocked by the account's hosting usage limit.
+- GitHub upload to `7-MIT/7mit-mail` was rejected because the connected GitHub integration lacks repository write access. This source package is the fallback delivery, not evidence of a GitHub commit.
+- No real mailbox credentials were supplied. Reading and sending against a real mailbox have not been verified.
 
-## Features
-- Folders (Inbox/Drafts/Sent/Spam/Trash/Archive detected via SPECIAL-USE, plus custom folders: create/delete), unread counters, pagination, server-side search (subject/from/to/body), unread/starred filters
-- Star / read / unread / move / delete (to Trash, permanent from Trash), bulk select, keyboard shortcuts (`c` compose, `/` search, `j`/`k` next/prev, `#` delete)
-- HTML + plain-text viewer (sanitized, sandboxed iframe, remote images blocked until you allow them), inline `cid:` images
-- Composer: To/Cc/Bcc, contact autocomplete, rich text, reply / reply-all / forward with quoting and threading headers, signatures, attachments (≤25 MB each), drafts saved to the server's Drafts folder, copy saved to Sent
-- Download attachments (forced download, `nosniff`, sandbox CSP; only png/jpg/gif/webp ever render inline)
-- Multiple accounts per user (max 10), separate IMAP and SMTP host/port/TLS/auth, connection test before saving
-- Background sync with **IMAP IDLE** (falls back to polling where unsupported) pushing near-real-time updates to the UI over Server-Sent Events; optional browser notifications
-- Contacts (auto-collected from sent mail), settings (theme, page size, remote images), responsive UI with dark mode
+## Included features
 
-## Run
-```bash
-npm ci
-export MASTER_KEY=$(openssl rand -base64 32)   # keep it safe & stable
-export AKUN_AUTH_URL=https://lajzrempjyoqkubkumhb.supabase.co/functions/v1/akun-auth   # or ALLOW_REGISTRATION=1 for local accounts
-npm start                                      # http://127.0.0.1:3000
-```
-Requires Node ≥ 22.13 (uses built-in `node:sqlite`). See `.env.example` for every setting. Docker: `docker build -t 7mit-mail . && docker run -p 3000:3000 -v mail7:/data -e MASTER_KEY=… 7mit-mail`.
-Put it behind a TLS-terminating reverse proxy (nginx/Caddy) and set `TRUST_PROXY=1`; disable proxy buffering for `/api/events`.
+Inbox, Sent, Drafts, Spam, Trash, custom folders, server-side search, 25-message pagination, unread counters, read/unread and starred flags, folder moves, reply, plain-text/HTML viewing and composition, attachment upload/download, contacts, signatures, multiple accounts and custom domains. Mail is held by your existing provider; connecting an account does not provision a new mailbox or domain.
 
-## Default mail server
-New mailboxes are pre-filled with `imap.foundermail.mx:993` (SSL/TLS) and `smtp.foundermail.mx:587` (STARTTLS); the username defaults to the full address. Override with `DEFAULT_IMAP_*` / `DEFAULT_SMTP_*` (see `.env.example`). Users can still change the hosts for any other provider.
+The frontend refreshes the active mailbox every 60 seconds while visible. A Supabase Cron job runs every two minutes, processing up to two accounts due for background sync. Each account has a minimum four-minute background interval. Larger account populations take longer. Background sync stores an encrypted Inbox metadata snapshot (50 newest message summaries, flags, unread count, UID validity, folder list). Other folders are read on demand. Persistent IMAP IDLE is intentionally not used because hosted Edge Functions have bounded lifetimes.
 
-## Sign-in with akun.7mit
-akun.7mit authenticates through the `akun-auth` edge function on server.7mit: it looks the username up in `portal_login_accounts` (bcrypt `password_hash`, `active = true`) and creates a session token in `chat_user_sessions_v4`. This app reuses that function instead of reading the table itself, so it needs **no database or service-role credentials**.
+## Source layout
 
-- Set `AKUN_AUTH_URL`. The login form then asks for the akun.7mit username (`name` or `name@7mit`) and password. If one username has several account types (Siswa/Guru/Pengurus) the user picks one, exactly like akun.7mit.
-- On success the backend creates its own session and keeps the akun.7mit token (encrypted). Every 5 minutes it re-validates that token, so **revoking the device in akun.7mit, changing the password there, or deactivating the account signs the user out of mail too**. Logging out here revokes only the token this login created.
-- A user is identified by `account_key` (a Siswa and a Guru account with the same username get separate mailbox lists). The browser's IP and user agent are forwarded so the entry in akun.7mit's device list is meaningful.
-- `Authorization: Bearer <akun.7mit session token>` is also accepted, for a future hand-off from akun.7mit to `mail.7mit.org` without retyping the password.
-- Failed logins are rate limited here (10 / 15 min per IP+username) on top of akun.7mit's own delays.
-- This project does not touch the existing `mail7mit_*` tables.
-- Not verified against the live function: the build sandbox could not reach server.7mit, so the integration is tested against a mock that follows the `akun-auth` source. Run one real login after deploying.
+- `app/mail.tsx`: webmail interface.
+- `app/api/mail/route.ts`: same-origin server proxy and HttpOnly akun.7mit session cookie.
+- `supabase/functions/mail7mit-api/index.ts`: IMAP/SMTP, mailbox operations, ownership checks, encryption, scheduled sync.
+- `supabase/functions/mail7mit-api/security.mjs`: AES-256-GCM and public-address/DNS guards.
+- `supabase/sql/`: exact schema and scheduling setup.
+- `supabase/config.toml`: custom session authentication configuration.
+- `pnpm-lock.yaml`: frontend dependency lock.
 
-## Security model
-| Concern | Handling |
-|---|---|
-| Mail credentials | AES-256-GCM at rest (`MASTER_KEY`), decrypted only in server memory, never returned by the API |
-| Arbitrary hosts (SSRF) | Hosts are DNS-resolved and rejected if loopback/private/link-local unless `ALLOW_PRIVATE_HOSTS=1` |
-| Transport | TLS certificate verification on; unencrypted IMAP/SMTP refused unless `ALLOW_INSECURE=1` |
-| Sessions / CSRF | Random tokens, only the SHA-256 stored; HttpOnly + SameSite=Lax cookie; mutating requests need `X-Requested-With` |
-| Login abuse | scrypt hashing, 10 failures / 15 min per IP+email |
-| Hostile email | `sanitize-html` allow-list, no scripts/forms/iframes/`javascript:`; rendered in a sandboxed iframe (no scripts); strict CSP; remote images blocked by default |
-| Tenant isolation | Every account/message/contact query is scoped to the signed-in user (verified in tests: other users get 404) |
+## Development and deployment
 
-## Limits / not done yet
-- Headers are cached; bodies are fetched on demand. Deep-history search relies on the server's SEARCH (so body search speed depends on your IMAP server).
-- Sync window is the newest 100 messages per folder (older pages are back-filled when you scroll); flag changes made elsewhere on older mail show up on the next backfill/refresh.
-- Only INBOX is IDLE-watched; other folders refresh on the periodic sync (default 2 min), on open via ⟳, and on your own actions.
-- No OAuth2 (XOAUTH2) for Gmail/Outlook — use app passwords. No conversation threading view, no message-source/PGP, no import/export of contacts, no per-folder rename UI, single-process (no clustering of IDLE watchers).
-- UI is Indonesian-only.
+Requires Node.js 22.13 or newer and pnpm. Install with `pnpm install --frozen-lockfile`, then run `pnpm dev` or `pnpm build`. The generated Worker is `dist/server/index.js`. This is a fullstack Worker, not a static Cloudflare Pages export. Deploy the built Worker using the generated `dist/server/wrangler.json` with your Cloudflare account, or register and publish through Sites when quota is available. Do not add fake hosting project IDs to `.openai/hosting.json`.
 
-## Tests
-`npm test` — unit tests plus an end-to-end test against a real Dovecot (see `test/README.md`).
+The verified server.7mit function URL is in `app/api/mail/route.ts`. Change that URL when targeting another Supabase project. HTTPS is required for the secure session cookie. The interface does not require a Supabase service-role key in browser code or frontend runtime configuration.
+
+The Supabase schema has already been applied to server.7mit. Do not rerun the CREATE TABLE scripts there. For a new project, review and apply them once, provision credential/sync keys, and deploy `mail7mit-api`. The existing `akun-auth`, `portal_login_accounts`, and `chat_user_sessions_v4` integration is a prerequisite; this project does not copy or replace those existing services.
+
+Use the current Supabase CLI's help before running deployment commands. The function uses pinned npm imports. `verify_jwt=false` is deliberate: every private action verifies a live, unrevoked akun.7mit session and an active account server-side. Scheduled sync has a separate private token. The unauthenticated `status` action returns only service capabilities. No account data or passwords are returned by it.
+
+## Connection settings
+
+IMAP commonly uses TLS port 993. SMTP commonly uses TLS port 465. TLS certificates are verified; disabling certificate checks and plaintext authentication are not supported.
+
+Supabase hosted functions block outgoing ports 25 and 587. These ports are rejected before a mailbox can be saved. A provider that only supports port 587 needs another supported submission port or a separately hosted relay. Provider support for another port must be confirmed with the provider.
+
+Public mail hostnames are resolved server-side and the verified IP is pinned for each connection while preserving TLS server-name verification. Loopback, LAN, cloud-metadata, mapped, and known transition-tunnel addresses are rejected. This build supports publicly reachable mail servers; private intranet IMAP hosts are not supported.
+
+## Credential storage and identity
+
+Credentials are encrypted with AES-256-GCM using a fresh IV for every save. Browser access to mail tables and key tables is revoked; RLS is enabled with no browser policies. Only the Edge Function's service role accesses them. Passwords are transmitted during account setup over HTTPS, used to test both servers, then stored encrypted; passwords are never returned to the frontend, placed in localStorage, or committed.
+
+The preferred credential key is a 32-byte base64 `MAIL_CREDENTIAL_KEY` Edge Function secret. Because the connected deployment tools cannot set Edge Function secrets, the current installation uses a service-role-only database key in `mail7mit_keys`. This separates browser access from credentials but does not protect credentials against a full database/service-role compromise. To move the key to an Edge Function secret, transfer the **same key** through the Supabase dashboard, verify existing accounts decrypt, then remove the database fallback row. Changing the key without re-encrypting existing accounts makes saved credentials unreadable. Never put it in GitHub, frontend environment variables, screenshots, or logs.
+
+akun.7mit tokens are held in a Secure, HttpOnly, SameSite=Strict cookie in the frontend proxy. The proxy rejects cross-origin writes. Mail ownership is derived from the verified session's account key, never a client-supplied owner. Sessions expire after 30 days in this service and are checked for revocation on every operation. Different akun.7mit roles have separate mailbox ownership.
+
+## HTML and attachments
+
+HTML messages are rendered in a sandboxed iframe with no script permissions. The message document has a content-security policy that blocks external resources, including remote tracking images. The composer supports plain text or HTML source. Attachment names are sanitized; attachments are transmitted through the server proxy and included in MIME mail. There is a 10 MB total upload limit, ten attachments per message, and a 15 MB received-message viewer limit. SMTP success is reported separately from a failed attempt to append a copy to Sent so a user is not encouraged to resend an already delivered message.
+
+## Validation
+
+Frontend TypeScript check and Worker production build passed. Security tests cover credential encryption, tampering, wrong-key rejection, fresh-IV use, and private-host rejection. The deployed health and unauthenticated-access checks are recorded in `VALIDATION.md`. Real IMAP/SMTP, attachment round trips, and background mailbox contents remain untested until a real mailbox is connected. Browser/WebMCP execution validation was unavailable in this environment.
+
+## Design update · 8 October 2026
+
+Premium burgundy mail surfaces, rounded panels, focused input states, animated folder navigation, staggered message entrances, message-reader transitions, loading skeletons, button hover/press feedback, starred-message feedback, animated dialogs/tabs/attachments, and styled folder/disconnect dialogs. Responsive layout and prefers-reduced-motion support are preserved. Motion only loops during loading.
