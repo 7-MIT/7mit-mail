@@ -30,3 +30,9 @@ Design update: frontend TypeScript check and Worker build passed. The updated CS
 - `defaultsReport` against the real accounts: 32 accounts, 31 receive a default mailbox (eksekutif 10, guru 2, legislatif 3, yudikatif 4, kemenjira 3, kemenkrep 3, kemenbanggul 3, kemenkesbug 3); only the Service Account has none. Four spelling differences between the organisation chart and login names are handled by the typo-tolerant matcher.
 - Found and fixed: `security.mjs` used `Buffer` without importing it, so encryption failed in the Supabase runtime ("Buffer is not defined"); adding any external mailbox would have failed the same way.
 - Not exercised end to end: a real browser login followed by opening a default mailbox through the website (no test credentials were used).
+
+## Update: halo@7mit.org (13 October 2026)
+
+- `halo@7mit.org` added as a ninth default mailbox for Eksekutif, Legislatif and Yudikatif members; `mail7mit-api` version 7 deployed, table constraint extended, password seeded encrypted.
+- `testDefaults`: all 9 default mailboxes sign in over IMAP (TLS 993) and SMTP (STARTTLS 587).
+- `defaultsReport`: 17 accounts receive `halo@` (10 eksekutif + 3 legislatif + 4 yudikatif); kementerian members and guru do not. Only the Service Account has no default mailbox.

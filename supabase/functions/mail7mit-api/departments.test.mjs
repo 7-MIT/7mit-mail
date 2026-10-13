@@ -31,26 +31,33 @@ test('spelling differences between the chart and the login name still match, dif
 });
 
 test('students get the mailbox of their lembaga', () => {
-  assert.deepEqual(departmentsFor(acc('Izyan Waiz Utomo'), members), ['legislatif']);
-  assert.deepEqual(departmentsFor(acc('Muhammad Ali Ibrahim Alfatih'), members), ['yudikatif']);
-  assert.deepEqual(departmentsFor(acc('Muhammad Baihaqi Al Ghazali'), members), ['yudikatif']);
+  assert.deepEqual(departmentsFor(acc('Izyan Waiz Utomo'), members), ['legislatif', 'halo']);
+  assert.deepEqual(departmentsFor(acc('Muhammad Ali Ibrahim Alfatih'), members), ['yudikatif', 'halo']);
+  assert.deepEqual(departmentsFor(acc('Muhammad Baihaqi Al Ghazali'), members), ['yudikatif', 'halo']);
   assert.deepEqual(departmentsFor(acc('Alamgir Daffa Saputra'), members), ['kemenjira']);
   assert.deepEqual(departmentsFor(acc('Narendra Putra Wijaya'), members), ['kemenkesbug']);
-  assert.deepEqual(departmentsFor(acc('Arsa Alifiandra Rahmanto'), members), ['eksekutif']);
+  assert.deepEqual(departmentsFor(acc('Arsa Alifiandra Rahmanto'), members), ['eksekutif', 'halo']);
   assert.deepEqual(departmentsFor(acc('Budi Biasa'), members), [], 'ordinary student has no department mailbox');
+});
+
+test('halo@ is shared by eksekutif, legislatif and yudikatif only', () => {
+  const has = (name) => departmentsFor(acc(name), members).includes('halo');
+  assert.ok(has('Izyan Waiz Utomo') && has('Dawud Hanif Darwin') && has('Mikhail Raffandra Alfadli'));
+  assert.ok(!has('Alamgir Daniswara Sadewa') && !has('Narendra Putra') && !has('Budi Biasa'), 'kementerian members do not get halo');
+  assert.ok(!departmentsFor(acc('Guru X', 'guru', 'Guru Kelas'), members).includes('halo'));
 });
 
 test('guru and executive officer accounts', () => {
   assert.deepEqual(departmentsFor(acc('Syariful Amri, Lc.', 'guru', 'Guru Kelas'), members), ['guru']);
   assert.deepEqual(departmentsFor(acc('Kelas 7 MIT', 'guru', 'Akun Resmi'), members), ['guru']);
-  for (const role of ['Presiden', 'Wakil Presiden', 'Bendahara 1', 'Sekretariat 2']) assert.deepEqual(departmentsFor(acc('X Y', 'pengurus', role), []), ['eksekutif'], role);
+  for (const role of ['Presiden', 'Wakil Presiden', 'Bendahara 1', 'Sekretariat 2']) assert.deepEqual(departmentsFor(acc('X Y', 'pengurus', role), []), ['eksekutif', 'halo'], role);
   assert.deepEqual(departmentsFor(acc('Service account', 'pengurus', 'Service Account'), members), []);
 });
 
 test('an ambiguous name match grants nothing; overrides fix it', () => {
   const dup = [...members, { role_key: 'health_wellness', name: 'Izyan Waiz Utomo' }];
   assert.deepEqual(departmentsFor(acc('Izyan Waiz Utomo'), dup), []);
-  assert.deepEqual(departmentsFor(acc('Izyan Waiz Utomo'), dup, { 'k-Izyan Waiz Utomo': ['legislatif', 'kemenkesbug', 'bogus'] }), ['legislatif', 'kemenkesbug']);
+  assert.deepEqual(departmentsFor(acc('Izyan Waiz Utomo'), dup, { 'k-Izyan Waiz Utomo': ['legislatif', 'kemenkesbug', 'bogus'] }), ['legislatif', 'halo', 'kemenkesbug']);
 });
 
 test('passwords: only known mailboxes, no leakage of format errors', () => {
@@ -67,5 +74,5 @@ test('passwords: only known mailboxes, no leakage of format errors', () => {
 test('default addresses are recognised so they cannot be re-added as external mailboxes', () => {
   for (const m of Object.values(MAILBOXES)) assert.ok(isDefaultEmail(m.email.toUpperCase()));
   assert.equal(isDefaultEmail('someone@gmail.com'), false);
-  assert.equal(Object.keys(MAILBOXES).length, 8);
+  assert.equal(Object.keys(MAILBOXES).length, 9);
 });

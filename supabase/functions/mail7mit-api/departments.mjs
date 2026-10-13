@@ -6,11 +6,14 @@ export const MAILBOXES = {
   eksekutif: { email: 'eksekutif@7mit.org', label: 'Lembaga Eksekutif' },
   legislatif: { email: 'legislatif@7mit.org', label: 'Lembaga Legislatif (Class Quality)' },
   yudikatif: { email: 'yudikatif@7mit.org', label: 'Lembaga Yudikatif (Class Safety)' },
+  halo: { email: 'halo@7mit.org', label: 'Halo 7 MIT (Eksekutif, Legislatif & Yudikatif)' },
   kemenjira: { email: 'kemenjira@7mit.org', label: 'Soul & Space (Kementerian)' },
   kemenkrep: { email: 'kemenkrep@7mit.org', label: 'Creativity & Experience (Kementerian)' },
   kemenbanggul: { email: 'kemenbanggul@7mit.org', label: 'Excellence & Development (Kementerian)' },
   kemenkesbug: { email: 'kemenkesbug@7mit.org', label: 'Health & Wellness (Kementerian)' },
 };
+// Shared by the three lembaga: anyone who gets eksekutif, legislatif or yudikatif also gets halo.
+export const HALO_MEMBERS = ['eksekutif', 'legislatif', 'yudikatif'];
 export const DEFAULT_SERVERS = { imapHost: 'imap.foundermail.mx', imapPort: 993, imapTls: 'ssl', smtpHost: 'smtp.foundermail.mx', smtpPort: 587, smtpTls: 'starttls' };
 
 // organization_roles.role_key -> mailbox key
@@ -53,6 +56,7 @@ export function departmentsFor(account, members = [], overrides = {}) {
     }
     if (best > 0 && found.size === 1) out.add([...found][0]);
   }
+  if (HALO_MEMBERS.some((k) => out.has(k))) out.add('halo');
   return [...out].sort((a, b) => Object.keys(MAILBOXES).indexOf(a) - Object.keys(MAILBOXES).indexOf(b));
 }
 

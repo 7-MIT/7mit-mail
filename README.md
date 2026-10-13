@@ -86,6 +86,7 @@ Every akun.7mit user gets the shared mailbox of their lembaga as a **locked defa
 | `eksekutif@7mit.org` | Presiden, Wakil Presiden, Bendahara, Sekretariat accounts, and students listed under Pengurus Inti |
 | `legislatif@7mit.org` | members of Class Quality & Culture Board (CQCB) |
 | `yudikatif@7mit.org` | members of Class Safety & Wellbeing |
+| `halo@7mit.org` | shared by everyone who has `eksekutif@`, `legislatif@` or `yudikatif@` |
 | `kemenjira@`, `kemenkrep@`, `kemenbanggul@`, `kemenkesbug@7mit.org` | members of Soul & Space, Creativity & Experience, Excellence & Development, Health & Wellness |
 
 Membership comes from `organization_members` / `organization_roles` (the same data as the organisation chart), matched to the login account by name (initials such as "Alamgir D. S." match full names). A name that matches two different lembaga gives **no** access; set it explicitly with `MAIL_DEPARTMENT_OVERRIDES='{"<account_key>":["legislatif","kemenkesbug"]}'`. An ordinary student with no lembaga has no default mailbox and can add their own.

@@ -34,8 +34,8 @@ const T = { guru: '11111111-1111-1111-1111-111111111111', izyan: '22222222-2222-
 test('each role lists its own default mailbox, locked, with no secrets', async () => {
   const g = await call(T.guru, { action: 'accounts' });
   assert.equal(g.status, 200); assert.deepEqual(g.body.accounts.map((a) => [a.id, a.email, a.locked]), [['default:guru', 'guru@7mit.org', true]]);
-  assert.deepEqual((await call(T.izyan, { action: 'accounts' })).body.accounts.map((a) => a.email), ['legislatif@7mit.org']);
-  assert.deepEqual((await call(T.pres, { action: 'accounts' })).body.accounts.map((a) => a.email), ['eksekutif@7mit.org']);
+  assert.deepEqual((await call(T.izyan, { action: 'accounts' })).body.accounts.map((a) => a.email), ['legislatif@7mit.org', 'halo@7mit.org']);
+  assert.deepEqual((await call(T.pres, { action: 'accounts' })).body.accounts.map((a) => a.email), ['eksekutif@7mit.org', 'halo@7mit.org']);
   assert.deepEqual((await call(T.biasa, { action: 'accounts' })).body.accounts, []);
   assert.ok(!JSON.stringify(g.body).includes(PASS.guru), 'password never returned');
 });
